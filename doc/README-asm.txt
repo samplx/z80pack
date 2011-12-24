@@ -12,7 +12,7 @@ after a "." would be used as extension!
 Option o:
 To override the default name of the output file. Without this option
 the name of the output file becomes the name of the input file,
-but with the extension ".bin". The output file may have a path,
+but with the extension ".bin" or ".hex". The output file may have a path,
 the maximum length is limited to 2048 characters.
 
 Option f:

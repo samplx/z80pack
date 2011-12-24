@@ -1,4 +1,4 @@
-	TITLE	'Z80 Instruction Set in alphabetical Order'
+	TITLE	'Z80 Instruction Set in alphabetical order'
 
 IND	EQU	5
 M	EQU	10H

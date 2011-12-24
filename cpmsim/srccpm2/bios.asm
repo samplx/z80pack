@@ -1,6 +1,6 @@
-;	CBIOS for Z80-Simulator
+;	Z80 CBIOS for Z80-Simulator
 ;
-;	Copyright (C) 1988-2006 by Udo Munk
+;	Copyright (C) 1988-2007 by Udo Munk
 ;
 MSIZE	EQU	64		;cp/m version memory size in kilobytes
 ;
@@ -11,6 +11,7 @@ BIAS	EQU	(MSIZE-20)*1024
 CCP	EQU	3400H+BIAS	;base of ccp
 BDOS	EQU	CCP+806H	;base of bdos
 BIOS	EQU	CCP+1600H	;base of bios
+NSECTS	EQU	(BIOS-CCP)/128	;warm start sector count
 CDISK	EQU	0004H		;current disk number 0=A,...,15=P
 IOBYTE	EQU	0003H		;intel i/o byte
 ;
@@ -30,7 +31,6 @@ DMAL	EQU	15		;dma-port: dma address low
 DMAH	EQU	16		;dma-port: dma address high
 ;
 	ORG	BIOS		;origin of this program
-NSECTS	EQU	(BIOS-CCP)/128	;warm start sector count
 ;
 ;	jump vector for individual subroutines
 ;
@@ -53,7 +53,7 @@ WBOOTE: JP	WBOOT		;warm start
 	JP	SECTRAN		;sector translate
 ;
 ;	fixed data tables for four-drive standard
-;	IBM-compatible 8" disks
+;	IBM-compatible 8" SD disks
 ;
 ;	disk parameter header for disk 00
 DPBASE:	DEFW	TRANS,0000H
@@ -76,7 +76,7 @@ DPBASE:	DEFW	TRANS,0000H
 	DEFW	DIRBF,DPBLK
 	DEFW	CHK03,ALL03
 ;
-;	sector translate vector for the IBM 8" disks
+;	sector translate vector for the IBM 8" SD disks
 ;
 TRANS:	DEFB	1,7,13,19	;sectors 1,2,3,4
 	DEFB	25,5,11,17	;sectors 5,6,7,8
@@ -86,7 +86,7 @@ TRANS:	DEFB	1,7,13,19	;sectors 1,2,3,4
 	DEFB	18,24,4,10	;sectors 21,22,23,24
 	DEFB	16,22		;sectors 25,26
 ;
-;	disk parameter block, common to all IBM 8" disks
+;	disk parameter block, common to all IBM 8" SD disks
 ;
 DPBLK:  DEFW	26		;sectors per track
 	DEFB	3		;block shift factor
@@ -99,29 +99,17 @@ DPBLK:  DEFW	26		;sectors per track
 	DEFW	16		;check size
 	DEFW	2		;track offset
 ;
-;	fixed data tables for 4MB harddisk
+;	fixed data tables for 4MB harddisks
 ;
 ;	disk parameter header
-HDBASE:	DEFW	HDTRA,0000H
+HDB1:	DEFW	0000H,0000H
 	DEFW	0000H,0000H
 	DEFW	DIRBF,HDBLK
-	DEFW	CHKHD,ALLHD
-;
-;	sector translate vector for the hardisk
-;
-HDTRA:	DEFB	1,2,3,4,5,6,7,8,9,10
-	DEFB	11,12,13,14,15,16,17,18,19,20
-	DEFB	21,22,23,24,25,26,27,28,29,30
-	DEFB	31,32,33,34,35,36,37,38,39,40
-	DEFB	41,42,43,44,45,46,47,48,49,50
-	DEFB	51,52,53,54,55,56,57,58,59,60
-	DEFB	61,62,63,64,65,66,67,68,69,70
-	DEFB	71,72,73,74,75,76,77,78,79,80
-	DEFB	81,82,83,84,85,86,87,88,89,90
-	DEFB	91,92,93,94,95,96,97,98,99,100
-	DEFB	101,102,103,104,105,106,107,108,109,110
-	DEFB	111,112,113,114,115,116,117,118,119,120
-	DEFB	121,122,123,124,125,126,127,128
+	DEFW	CHKHD1,ALLHD1
+HDB2:	DEFW	0000H,0000H
+	DEFW	0000H,0000H
+	DEFW	DIRBF,HDBLK
+	DEFW	CHKHD2,ALLHD2
 ;
 ;       disk parameter block for harddisk
 ;
@@ -136,27 +124,38 @@ HDBLK:  DEFW    128		;sectors per track
 	DEFW    0		;check size
 	DEFW    0		;track offset
 ;
-;	signon message
+;	messages
 ;
-SIGNON: DEFM	'64K CP/M Vers. 2.2 (CBIOS V1.1 for Z80SIM, '
-	DEFM	'Copyright 1988-2006 by Udo Munk)'
+SIGNON: DEFM	'64K CP/M Vers. 2.2 (Z80 CBIOS V1.2 for Z80SIM, '
+	DEFM	'Copyright 1988-2007 by Udo Munk)'
 	DEFB	13,10,0
 ;
+LDERR:	DEFM	'BIOS: error booting'
+	DEFB	13,10,0
+
+;
 ;	end of fixed tables
+;
+;	utility functions
+;
+;	print a 0 terminated string to console device
+;	pointer to string in HL
+;
+PRTMSG:	LD	A,(HL)
+	OR	A
+	RET	Z
+	LD	C,A
+	CALL	CONOUT
+	INC	HL
+	JP	PRTMSG
 ;
 ;	individual subroutines to perform each function
 ;	simplest case is to just perform parameter initialization
 ;
 BOOT:   LD	SP,80H		;use space below buffer for stack
 	LD	HL,SIGNON	;print message
-BOOTL:  LD	A,(HL)
-	OR	A
-	JP	Z,BOOTC
-	LD	C,A
-	CALL	CONOUT
-	INC	HL
-	JP	BOOTL
-BOOTC:  XOR	A		;zero in the accum
+	CALL	PRTMSG
+	XOR	A		;zero in the accum
 	LD	(IOBYTE),A	;clear the iobyte
 	LD	(CDISK),A	;select disk zero
 	JP	GOCPM		;initialize and go to cp/m
@@ -185,14 +184,19 @@ LOAD1:				;load one more sector
 	CALL	SETDMA		;set dma address from b,c
 ;	drive set to 0, track set, sector set, dma address set
 	CALL	READ
-	CP	00H		;any errors?
-	JP	NZ,WBOOT	;retry the entire boot if an error occurs
+	OR	A		;any errors?
+	JP	Z,LOAD2		;no, continue
+	LD	HL,LDERR	;error, print message
+	CALL	PRTMSG
+	DI			;and halt the machine
+	HALT
 ;	no error, move to next sector
-	POP	HL		;recall dma address
+LOAD2:	POP	HL		;recall dma address
 	LD	DE,128		;dma=dma+128
 	ADD	HL,DE		;new dma address is in h,l
 	POP	DE		;recall sector address
-	POP	BC		;recall number of sectors remaining, and current trk
+	POP	BC		;recall number of sectors remaining,
+				;and current trk
 	DEC	B		;sectors=sectors-1
 	JP	Z,GOCPM		;transfer to cp/m if all have been loaded
 ;	more sectors remain to load, check for track change
@@ -220,7 +224,6 @@ GOCPM:
 	LD	BC,80H		;default dma address is 80h
 	CALL	SETDMA
 ;
-	EI			;enable the interrupt system
 	LD	A,(CDISK)	;get current disk number
 	LD	C,A		;send to the ccp
 	JP	CCP		;go to cp/m for further processing
@@ -250,7 +253,7 @@ LIST:	LD	A,C		;character to register a
 	OUT	(PRTDAT),A
 	RET
 ;
-;	return list status (0 if not ready, 0xff if ready)
+;	return list status (00h if not ready, 0ffh if ready)
 ;
 LISTST: IN	A,(PRTSTA)
 	RET
@@ -279,11 +282,16 @@ HOME:	LD	C,0		;select track 0
 ;
 SELDSK: LD	HL,0000H	;error return code
 	LD	A,C
-	CP	4		;must be between 0 and 3
-	JR	NC,SELHD	;no carry if 4,5,...
+	CP	4		;FD drive 0-3?
+	JP	C,SELFD		;go
+	CP	8		;harddisk 1?
+	JP	Z,SELHD1	;go
+	CP	9		;harddisk 2?
+	JP	Z,SELHD2	;go
+	RET			;no, error
 ;	disk number is in the proper range
 ;	compute proper disk parameter header address
-	OUT	(FDCD),A	;selekt disk drive
+SELFD:	OUT	(FDCD),A	;selekt disk drive
 	LD	L,A		;L=disk number 0,1,2,3
 	ADD	HL,HL		;*2
 	ADD	HL,HL		;*4
@@ -292,10 +300,10 @@ SELDSK: LD	HL,0000H	;error return code
 	LD	DE,DPBASE
 	ADD	HL,DE		;HL=.dpbase(diskno*16)
 	RET
-SELHD:	CP	8		;select the harddisk?
-	RET	NZ		;no, error
-	OUT	(FDCD),A	;select disk drive
-	LD	HL,HDBASE	;HL=hdbase for harddisk
+SELHD1:	LD	HL,HDB1		;dph harddisk 1
+	JP	SELHD
+SELHD2:	LD	HL,HDB2		;dph harddisk 2
+SELHD:	OUT	(FDCD),A	;select harddisk drive
 	RET
 ;
 ;	set track given by register c
@@ -314,7 +322,16 @@ SETSEC: LD	A,C
 ;	translate table given by DE
 ;
 SECTRAN:
-	EX	DE,HL		;HL=.trans
+	LD	A,D		;do we have a translation table?
+	OR	E
+	JP	NZ,SECT1	;yes, translate
+	LD	L,C		;no, return untranslated
+	LD	H,B		;in HL
+	INC	L		;sector no. start with 1
+	RET	NZ
+	INC	H
+	RET
+SECT1:	EX	DE,HL		;HL=.trans
 	ADD	HL,BC		;HL=.trans(sector)
 	LD	L,(HL)		;L = trans(sector)
 	LD	H,0		;HL= trans(sector)
@@ -341,11 +358,6 @@ WRITE:	LD	A,1		;write command -> A
 ;	operation.  return a 00h in register a if the operation completes
 ;	properly, and 01h if an error occurs during the read or write
 ;
-;	in this case, we have saved the disk number in 'diskno' (0-3)
-;			the track number in 'track' (0-76)
-;			the sector number in 'sector' (1-26)
-;			the dma address in 'dmaad' (0-65535)
-;
 WAITIO: OUT	(FDCOP),A	;start i/o operation
 	IN	A,(FDCST)	;status of i/o operation -> A
 	RET
@@ -363,13 +375,16 @@ ALL00:	DEFS	31		;allocation vector 0
 ALL01:	DEFS	31		;allocation vector 1
 ALL02:	DEFS	31		;allocation vector 2
 ALL03:	DEFS	31		;allocation vector 3
-ALLHD:	DEFS	255		;allocation vector harddisk
+ALLHD1:	DEFS	255		;allocation vector harddisk 1
+ALLHD2:	DEFS	255		;allocation vector harddisk 2
 CHK00:	DEFS	16		;check vector 0
 CHK01:	DEFS	16		;check vector 1
 CHK02:	DEFS	16		;check vector 2
 CHK03:	DEFS	16		;check vector 3
-CHKHD:	DEFS	0		;check vector harddisk
+CHKHD1:	DEFS	0		;check vector harddisk 1
+CHKHD2:	DEFS	0		;check vector harddisk 2
 ;
 ENDDAT	EQU	$		;end of data area
 DATSIZ	EQU	$-BEGDAT	;size of data area
+;
 	END			;of BIOS

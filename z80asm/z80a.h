@@ -7,6 +7,7 @@
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
+ *	18-MAR-2007 use default output file extension dependend on format
  */
 
 /*
@@ -20,11 +21,12 @@
 /*
  *	various constants
  */
-#define REL		"1.4"
+#define REL		"1.5"
 #define COPYR		"Copyright (C) 1987-2007 by Udo Munk"
-#define SRCEXT		".asm"	/* filenamen extension source */
-#define OBJEXT		".bin"	/* filenamen extension object */
-#define LSTEXT		".lis"	/* filenamen extension listing */
+#define SRCEXT		".asm"	/* filename extension source */
+#define OBJEXTBIN	".bin"	/* filename extension object */
+#define OBJEXTHEX	".hex"	/* filename extension hex */
+#define LSTEXT		".lis"	/* filename extension listing */
 #define OUTBIN		1	/* format of object: binary */
 #define OUTMOS		2	/*		     Mostek binary */
 #define OUTHEX		3	/*		     Intel hex */
@@ -50,7 +52,7 @@
 struct opc {
 	char *op_name;		/* opcode name */
 	int (*op_fun) ();	/* function pointer code generation */
-	int  op_c1;		/* first base opcode*/
+	int  op_c1;		/* first base opcode */
 	int  op_c2;		/* second base opcode */
 };
 
@@ -67,7 +69,7 @@ struct ope {
  */
 struct sym {
 	char *sym_name;		/* symbol name */
-	int  sym_wert;		/* symbol value */
+	int  sym_val;		/* symbol value */
 	struct sym *sym_next;	/* next entry */
 };
 

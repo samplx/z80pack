@@ -23,7 +23,6 @@
 int main(void)
 {
 	unsigned char sector[128];
-	register int i;
 	int fd, drivea, readed;
 
 	/* open drive A for writing */

@@ -20,7 +20,7 @@ int fdin, fdout;
 int main(int argc, char *argv[])
 {
 	char c;
-	void int_handler(void);
+	void int_handler(int);
 
 	if (argc != 2) {
 		puts("usage: receive filname &");
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
 	return(0);
 }
 
-void int_handler(void)
+void int_handler(int sig)
 {
 	close(fdin);
 	close(fdout);

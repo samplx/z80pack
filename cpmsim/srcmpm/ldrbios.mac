@@ -1,6 +1,6 @@
 ;	MP/M 2 LDRBIOS for Z80-Simulator
 ;
-;	Copyright (C) 1989-2006 by Udo Munk
+;	Copyright (C) 1989-2007 by Udo Munk
 ;
 	ORG	1700H
 ;
@@ -36,7 +36,7 @@ DMAH	EQU	16		;dma-port: dma address high
 	JP	LISTST		;return list status
 	JP	SECTRAN		;translate logical to physical sector
 ;
-;	fixed data tables for a	IBM-compatible 8" disk
+;	fixed data tables for a	IBM-compatible 8" SD disk
 ;
 ;	disk parameter header
 ;
@@ -45,7 +45,7 @@ DPH:	DEFW	TRANS,0000H
 	DEFW	DIRBF,DPBLK
 	DEFW	CHK00,ALL00
 ;
-;	sector translate vector for the IBM 8" disk
+;	sector translate vector for the IBM 8" SD disk
 ;
 TRANS:	DEFB	1,7,13,19	;sectors 1,2,3,4
 	DEFB	25,5,11,17	;sectors 5,6,7,8
@@ -55,7 +55,7 @@ TRANS:	DEFB	1,7,13,19	;sectors 1,2,3,4
 	DEFB	18,24,4,10	;sectors 21,22,23,24
 	DEFB	16,22		;sectors 25,26
 ;
-;	disk parameter block for the IBM 8" disk
+;	disk parameter block for the IBM 8" SD disk
 ;
 DPBLK:	DEFW	26		;sectors per track
 	DEFB	3		;block shift factor
@@ -71,8 +71,8 @@ DPBLK:	DEFW	26		;sectors per track
 ;	signon message
 ;
 SIGNON:	DEFB	13,10
-	DEFM	'LDRBIOS V1.0 for Z80SIM, '
-	DEFM	'Copyright 1989-2006 by Udo Munk'
+	DEFM	'LDRBIOS V1.1 for Z80SIM, '
+	DEFM	'Copyright 1989-2007 by Udo Munk'
 	DEFB	13,10,0
 ;
 ;	end of fixed tables
@@ -83,8 +83,7 @@ BOOT:	LD	HL,SIGNON	;print message
 BOOTL:  LD	A,(HL)
 	OR	A
 	JP	Z,WBOOT
-	LD	C,A
-	CALL	CONOUT
+	OUT	(CONDAT),A
 	INC	HL
 	JP	BOOTL
 ;
@@ -122,7 +121,7 @@ SELDSK:	PUSH	BC
 	POP	BC
 	LD	HL,0000H	;error return code
 	LD	A,C
-	CP	0		;we boot from drive 0 only
+	OR	A		;we boot from drive 0 only
 	RET	NZ		;return error
 ;	disk number is in the proper range
 ;	return proper disk parameter header address
@@ -174,4 +173,5 @@ CHK00:	DEFS	16		;check vector
 ;
 ENDDAT	EQU	$		;end
 DATSIZ	EQU	$-BEGDAT	;size of data area
+;
 	END			;of bios

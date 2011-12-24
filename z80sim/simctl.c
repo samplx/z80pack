@@ -22,6 +22,7 @@
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
+ * 06-OCT-07 Release 1.14 bug fixes and improvements
  */
 
 /*
@@ -40,6 +41,8 @@
 #include <signal.h>
 #include "sim.h"
 #include "simglb.h"
+
+#define BUFSIZE 256		/* buffer size for file i/o */
 
 extern void cpu(void);
 extern void disass(unsigned char **, int);
@@ -68,6 +71,8 @@ static void timeout(int);
 static void do_show(void);
 static int do_getfile(char *);
 static int load_mos(int, char *);
+static int load_hex(char *);
+static int checksum(char *);
 static void do_unix(char *);
 static void do_help(void);
 static void cpu_err_msg(void);
@@ -301,7 +306,8 @@ static void do_dump(char *s)
 		}
 		putchar('\t');
 		for (j = -16; j	< 0; j++)
-			printf("%c",((c	= *(wrk_ram+j))>=' ' &&	c<=0x7f) ? c : '.');
+			printf("%c", ((c = *(wrk_ram  + j)) >= ' ' && c <= 0x7f)
+			       ?  c : '.');
 		putchar('\n');
 	}
 }
@@ -338,7 +344,7 @@ static void do_modify(char *s)
 		wrk_ram	= ram +	exatoi(s);
 	for (;;) {
 		printf("%04x = %02x : ", (unsigned int)(wrk_ram - ram),
-					 *wrk_ram);
+		       *wrk_ram);
 		fgets(nv, sizeof(nv), stdin);
 		if (nv[0] == '\n') {
 			wrk_ram++;
@@ -641,16 +647,13 @@ static void do_break(char *s)
 #else
 	register int i;
 
-	if (!break_flag) {
-		puts("Can't use softbreaks with -h option.");
-		return;
-	}
 	if (*s == '\n')	{
 		puts("No Addr Pass  Counter");
 		for (i = 0; i <	SBSIZE;	i++)
 			if (soft[i].sb_pass)
 				printf("%02d %04x %05d %05d\n",	i,
-				soft[i].sb_adr,soft[i].sb_pass,soft[i].sb_passcount);
+				       soft[i].sb_adr,soft[i].sb_pass,
+				       soft[i].sb_passcount);
 		return;
 	}
 	if (isxdigit((int)*s)) {
@@ -880,6 +883,7 @@ static void do_show(void)
  *	The following file formats are supported:
  *
  *		binary images with Mostek header
+ *		Intel hex
  */
 static int do_getfile(char *s)
 {
@@ -911,9 +915,8 @@ static int do_getfile(char *s)
 		return (load_mos(fd, fn));
 	}
 	else {
-		printf("unkown format, can't load file %s\n", fn);
 		close(fd);
-		return(1);
+		return (load_hex(fn));
 	}
 }
 
@@ -947,6 +950,108 @@ static int load_mos(int fd, char *fn)
 	printf("LOADED: %04x\n", readed);
 	PC = wrk_ram;
 	return(rc);
+}
+
+/*
+ *	Loader for Intel hex
+ */
+static int load_hex(char *fn)
+{
+	register int i;
+	FILE *fd;
+	char buf[BUFSIZE];
+	char *s;
+	int count = 0;
+	int addr = 0;
+	int saddr = 0xffff;
+	int eaddr = 0;
+	int data;
+
+	if ((fd = fopen(fn, "r")) == NULL) {
+		printf("can't open file %s\n", fn);
+		return(1);
+	}
+
+	while (fgets(&buf[0], BUFSIZE, fd) != NULL) {
+		s = &buf[0];
+		while (isspace(*s))
+			s++;
+		if (*s != ':')
+			continue;
+		if (checksum(s + 1) != 0) {
+			printf("invalid checksum in hex record: %s\n", s);
+			return(1);
+		}
+		s++;
+		count = (*s <= '9') ? (*s - '0') << 4 :
+				      (*s - 'A' + 10) << 4;
+		s++;
+		count += (*s <= '9') ? (*s - '0') :
+				       (*s - 'A' + 10);
+		s++;
+		if (count == 0)
+			break;
+		addr = (*s <= '9') ? (*s - '0') << 4 :
+				     (*s - 'A' + 10) << 4;
+		s++;
+		addr += (*s <= '9') ? (*s - '0') :
+				      (*s - 'A' + 10);
+		s++;
+		addr *= 256;
+		addr += (*s <= '9') ? (*s - '0') << 4 :
+				      (*s - 'A' + 10) << 4;
+		s++;
+		addr += (*s <= '9') ? (*s - '0') :
+				      (*s - 'A' + 10);
+		s++;
+		if (addr < saddr)
+			saddr = addr;
+		if (addr > eaddr)
+			eaddr = addr + count - 1;
+		s += 2;
+		for (i = 0; i < count; i++) {
+			data = (*s <= '9') ? (*s - '0') << 4 :
+					     (*s - 'A' + 10) << 4;
+			s++;
+			data += (*s <= '9') ? (*s - '0') :
+					      (*s - 'A' + 10);
+			s++;
+			*(ram + addr + i) = data;
+		}
+	}
+
+	fclose(fd);
+	printf("Loader statistics for file %s:\n", fn);
+	printf("START : %04x\n", saddr);
+	printf("END   : %04x\n", eaddr);
+	printf("LOADED: %04x\n", eaddr - saddr + 1);
+	PC = ram + saddr;
+
+	return(0);
+}
+
+/*
+ *	Verify checksum of Intel hex records
+ */
+static int checksum(char *s)
+{
+	int chk = 0;
+
+	while (*s != '\n') {
+		chk += (*s <= '9') ?
+			(*s - '0') << 4 :
+			(*s - 'A' + 10) << 4;
+		s++;
+		chk += (*s <= '9') ?
+			(*s - '0') :
+			(*s - 'A' + 10);
+		s++;
+	}
+
+	if ((chk & 255) == 0)
+		return(0);
+	else
+		return(1);
 }
 
 /*

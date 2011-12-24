@@ -7,6 +7,7 @@
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
+ *	18-MAR-2007 use default output file extension dependend on format
  */
 
 /*
@@ -47,7 +48,7 @@ extern void a_sort_sym(int);
 
 static char *errmsg[] = {		/* error messages for fatal() */
 	"out of memory: %s",		/* 0 */
-	"usage: z80asm -ofile -f[b|m|h] -l[file] -s[n|a] {-x} -v -dsymbol ... file ...",
+	"usage: z80asm -f[b|m|h] -s[n|a] {-x} -v -ofile -l[file] -dsymbol ... file ...",
 	"Assembly halted",		/* 2 */
 	"can't open file %s",		/* 3 */
 	"internal error: %s"		/* 4 */
@@ -112,7 +113,10 @@ void options(int argc, char *argv[])
 					puts("name missing in option -o");
 					usage();
 				}
-				get_fn(objfn, s, OBJEXT);
+				if (out_form == OUTHEX)
+					get_fn(objfn, s, OBJEXTHEX);
+				else
+					get_fn(objfn, s, OBJEXTBIN);
 				s += (strlen(s) - 1);
 				break;
 			case 'l':
@@ -386,10 +390,17 @@ void open_o_files(char *source)
 
 	if (*objfn == '\0')
 		strcpy(objfn, source);
-	if ((p = strrchr(objfn, '.')) != NULL)
-		strcpy(p, OBJEXT);
-	else
-		strcat(objfn, OBJEXT);
+	if ((p = strrchr(objfn, '.')) != NULL) {
+		if (out_form == OUTHEX)
+			strcpy(p, OBJEXTHEX);
+		else
+			strcpy(p, OBJEXTBIN);
+	} else {
+		if (out_form == OUTHEX)
+			strcat(objfn, OBJEXTHEX);
+		else
+			strcat(objfn, OBJEXTBIN);
+	}
 
 	if (out_form == OUTHEX)
 		objfp = fopen(objfn, WRITEA);

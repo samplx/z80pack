@@ -19,6 +19,7 @@
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
+ * 06-OCT-07 Release 1.14 bug fixes and improvements
  */
 
 /*
@@ -28,7 +29,7 @@
 #include "sim.h"
 
 /*
- *	CPU-Register
+ *	CPU Registers
  */
 BYTE A,B,C,D,E,H,L;		/* Z80 primary registers */
 int  F;				/* normaly 8-Bit, but int is faster */
@@ -78,7 +79,7 @@ BYTE *t_end = ram + 65535;	/* end address for measurement */
 #endif
 
 /*
- *	Flag to controll operation of simulation
+ *	Flags to control operation of simulation
  */
 int s_flag;			/* flag	for -s option */
 int l_flag;			/* flag	for -l option */
@@ -87,7 +88,6 @@ int x_flag;			/* flag	for -x option */
 int i_flag;			/* flag for -i option */
 int f_flag;			/* flag for -f option */
 char xfn[LENCMD];		/* buffer for filename (option -x) */
-int break_flag = 1;		/* 1 = break at HALT, 0 = execute HALT */
 int cpu_state;			/* status of CPU emulation */
 int cpu_error;			/* error status of CPU emulation */
 int int_type;			/* type	of interrupt */

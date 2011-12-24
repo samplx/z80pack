@@ -19,6 +19,7 @@
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
+ * 06-OCT-07 Release 1.14 bug fixes and improvements
  */
 
 #include <unistd.h>
@@ -499,7 +500,7 @@ static int op_halt(void)		/* HALT */
 {
 	struct timespec timer;
 
-	if (break_flag)	{
+	if (IFF == 0)	{
 		cpu_error = OPHALT;
 		cpu_state = STOPPED;
 	} else
@@ -2603,14 +2604,14 @@ static int op_jphl(void)		/* JP (HL) */
 
 static int op_jr(void)			/* JR */
 {
-	PC += (char) *PC + 1;
+	PC += (signed char) *PC + 1;
 	return(12);
 }
 
 static int op_djnz(void)		/* DJNZ */
 {
 	if (--B) {
-		PC += (char) *PC + 1;
+		PC += (signed char) *PC + 1;
 		return(13);
 	} else {
 		PC++;
@@ -3139,7 +3140,7 @@ static int op_retp(void)		/* RET P */
 static int op_jrz(void)			/* JR Z,n */
 {
 	if (F &	Z_FLAG)	{
-		PC += (char) *PC + 1;
+		PC += (signed char) *PC + 1;
 		return(12);
 	} else {
 		PC++;
@@ -3150,7 +3151,7 @@ static int op_jrz(void)			/* JR Z,n */
 static int op_jrnz(void)		/* JR NZ,n */
 {
 	if (!(F	& Z_FLAG)) {
-		PC += (char) *PC + 1;
+		PC += (signed char) *PC + 1;
 		return(12);
 	} else {
 		PC++;
@@ -3161,7 +3162,7 @@ static int op_jrnz(void)		/* JR NZ,n */
 static int op_jrc(void)			/* JR C,n */
 {
 	if (F &	C_FLAG)	{
-		PC += (char) *PC + 1;
+		PC += (signed char) *PC + 1;
 		return(12);
 	} else {
 		PC++;
@@ -3172,7 +3173,7 @@ static int op_jrc(void)			/* JR C,n */
 static int op_jrnc(void)		/* JR NC,n */
 {
 	if (!(F	& C_FLAG)) {
-		PC += (char) *PC + 1;
+		PC += (signed char) *PC + 1;
 		return(12);
 	} else {
 		PC++;

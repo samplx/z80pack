@@ -1,6 +1,6 @@
 ;	CP/M 3 BIOS for Z80-Simulator
 ;
-;	Copyright (C) 1989-2006 by Udo Munk
+;	Copyright (C) 1989-2007 by Udo Munk
 ;
 	.Z80
 ;
@@ -14,6 +14,9 @@ READS	EQU	20
 DMA	EQU	26
 MULTI	EQU	44
 ;
+TPA	EQU	0100H		;address of TPA
+CPPSECS	EQU	26		;number of sectors to load for ccp
+;
 ;	i/o ports
 ;
 CONSTA	EQU	0		;console status port
@@ -24,11 +27,12 @@ AUXSTA	EQU	4		;auxilary status port
 AUXDAT	EQU	5		;auxilary data port
 FDCD	EQU	10		;fdc-port: # of drive
 FDCT	EQU	11		;fdc-port: # of track
-FDCS	EQU	12		;fdc-port: # of sector
+FDCS	EQU	12		;fdc-port: # of sector (low)
 FDCOP	EQU	13		;fdc-port: command
 FDCST	EQU	14		;fdc-port: status
 DMAL	EQU	15		;dma-port: dma address low
 DMAH	EQU	16		;dma-port: dma address high
+FDCSH	EQU	17		;fdc-port: # of sector high
 MMUINI	EQU	20		;initialize mmu
 MMUSEL	EQU	21		;bank select mmu
 CLKCMD	EQU	25		;clock command
@@ -44,9 +48,9 @@ GETDAH	EQU	4		;get days high
 ;
 ;	character device mode byte fields
 ;
-mb$input	EQU	00000001B	;device may do input
-mb$output	EQU	00000010B	;device may do output
-mb$in$out	EQU	mb$input+mb$output ;device may do both
+mb$input	EQU	00000001B		;device may do input
+mb$output	EQU	00000010B		;device may do output
+mb$in$out	EQU	mb$input+mb$output	;device may do both
 baud$none	EQU	0
 ;
 ;	external references in scb
@@ -110,9 +114,9 @@ DRIVES:	DW	DPH0
 	DW	0
 	DW	0
 	DW	0
-	DW	0
+	DW	DPH15
 ;
-;	fixed data tables for IBM-compatible 8" disks
+;	fixed data tables for IBM-compatible 8" SD disks
 ;
 ;	disk parameter header
 ;
@@ -157,7 +161,7 @@ DPH3:	DEFW	TRANS			;sector translation table
 	DEFW	0FFFEH			;hashing
 	DEFB	0			;hash bank
 ;
-;	sector translate vector for the IBM 8" disk
+;	sector translate vector for the IBM 8" SD disk
 ;
 TRANS:	DEFB	1,7,13,19	;sectors 1,2,3,4
 	DEFB	25,5,11,17	;sectors 5,6,7,8
@@ -167,7 +171,7 @@ TRANS:	DEFB	1,7,13,19	;sectors 1,2,3,4
 	DEFB	18,24,4,10	;sectors 21,22,23,24
 	DEFB	16,22		;sectors 25,26
 ;
-;	disk parameter block for the IBM 8" disk
+;	disk parameter block for the IBM 8" SD disk
 ;
 DPB0:	DEFW	26		;sectors per track
 	DEFB	3		;block shift factor
@@ -185,42 +189,26 @@ DPB0:	DEFW	26		;sectors per track
 ;
 ;	disk parameter header
 ;
-DPH8:	DEFW	HDTRA			;sector translation table
+DPH8:	DEFW	0			;sector translation table
 	DB	0,0,0,0,0,0,0,0,0	;bdos scratch area
 	DB	0			;media flag
 	DEFW	DPB1			;disk parameter block
-	DEFW	0FFFEH			;checksum vector
+	DEFW	0000H			;checksum vector
 	DEFW	0FFFEH			;allocation vector
 	DEFW	0FFFEH			;directory buffer control block
 	DEFW	0FFFFH			;dtabcb not used
 	DEFW	0FFFEH			;hashing
 	DEFB	0			;hash bank
-DPH9:	DEFW	HDTRA			;sector translation table
+DPH9:	DEFW	0			;sector translation table
 	DB	0,0,0,0,0,0,0,0,0	;bdos scratch area
 	DB	0			;media flag
 	DEFW	DPB1			;disk parameter block
-	DEFW	0FFFEH			;checksum vector
+	DEFW	0000H			;checksum vector
 	DEFW	0FFFEH			;allocation vector
 	DEFW	0FFFEH			;directory buffer control block
 	DEFW	0FFFFH			;dtabcb not used
 	DEFW	0FFFEH			;hashing
 	DEFB	0			;hash bank
-;
-;	sector translate vector for 4mb harddisk
-;
-HDTRA:	DEFB	1,2,3,4,5,6,7,8,9,10
-	DEFB	11,12,13,14,15,16,17,18,19,20
-	DEFB	21,22,23,24,25,26,27,28,29,30
-	DEFB	31,32,33,34,35,36,37,38,39,40
-	DEFB	41,42,43,44,45,46,47,48,49,50
-	DEFB	51,52,53,54,55,56,57,58,59,60
-	DEFB	61,62,63,64,65,66,67,68,69,70
-	DEFB	71,72,73,74,75,76,77,78,79,80
-	DEFB	81,82,83,84,85,86,87,88,89,90
-	DEFB	91,92,93,94,95,96,97,98,99,100
-	DEFB	101,102,103,104,105,106,107,108,109,110
-	DEFB	111,112,113,114,115,116,117,118,119,120
-	DEFB	121,122,123,124,125,126,127,128
 ;
 ;	disk parameter block for 4mb harddisk
 ;
@@ -232,7 +220,36 @@ DPB1:	DEFW    128		;sectors per track
 	DEFW    1023		;directory max
 	DEFB    255		;alloc 0
 	DEFB    255		;alloc 1
-	DEFW    0		;check size
+	DEFW    8000H		;check size
+	DEFW    0		;track offset
+	DEFB	0,0		;physical sector size and shift
+;
+;	fixed data tables for 512mb harddisk
+;
+;	disk parameter header
+;
+DPH15:	DEFW	0			;sector translation table
+	DB	0,0,0,0,0,0,0,0,0	;bdos scratch area
+	DB	0			;media flag
+	DEFW	DPB2			;disk parameter block
+	DEFW	0000H			;checksum vector
+	DEFW	0FFFEH			;allocation vector
+	DEFW	0FFFEH			;directory buffer control block
+	DEFW	0FFFFH			;dtabcb not used
+	DEFW	0FFFEH			;hashing
+	DEFB	0			;hash bank
+;
+;	disk parameter block for 512mb harddisk
+;
+DPB2:	DEFW    16384		;sectors per track
+	DEFB    7		;block shift factor
+	DEFB    127		;block mask
+	DEFB    0		;extent mask
+	DEFW    7FFFH		;disk size-1
+	DEFW    8191		;directory max
+	DEFB    255		;alloc 0
+	DEFB    255		;alloc 1
+	DEFW    8000H		;check size
 	DEFW    0		;track offset
 	DEFB	0,0		;physical sector size and shift
 ;
@@ -252,46 +269,49 @@ CHRTBL:	DEFB	'CRT   '
 	DEFB	baud$none
 	DEFB	0
 ;
-;	signon message
-;
-SIGNON:	DEFB	13,10
-	DEFM	'BANKED BIOS3 V1.4 for Z80SIM, '
-	DEFM	'Copyright 1989-2006 by Udo Munk'
-	DEFB	13,10
-	DEFB	0
-;
-;	small stack
-;
-	DS	8
-STACK:
-;
 ;	fcb for loading ccp
 ;
 CCPFCB:	DEFB	1,'CCP     COM',0,0,0,0
 	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 CCPREC:	DEFB	0,0,0
 ;
-	DSEG
-;
 ;	bios error messages
 ;
-CCPOER:	DEFB	13,10,'BIOS ERROR: cannot open CCP.COM',13,10,'$'
 CCPIOE:	DEFB	13,10,'BIOS ERROR: reading CCP.COM',13,10,'$'
+LOADE:	DEFB	13,10,'BIOS ERROR: reading systrack',13,10,'$'
 ;
-	CSEG
-;
-DRIVE:	DEFB	0		;drive to select
 BANK:	DEFB	0		;bank to select for dma
+;
+;	small stack
+;
+	DS	16
+STACK:
+;
+	DSEG
+;
+;	signon message
+;
+SIGNON:	DEFB	13,10
+	DEFM	'BANKED BIOS3 V1.6 for Z80SIM, '
+	DEFM	'Copyright 1989-2007 by Udo Munk'
+	DEFB	13,10
+	DEFB	0
 ;
 ;	end of fixed tables
 ;
 ;	individual subroutines to perform each function
 ;
-	DSEG
+BOOT:	LD	SP,STACK
+	LD	HL,SIGNON	;print message
+BOOT1:	LD	A,(HL)
+	OR	A
+	JP	Z,BOOT2
+	LD	C,A
+	CALL	CONOUT
+	INC	HL
+	JP	BOOT1
 ;
-BOOT:	LD	B,1		;indicate cold boot
-;
-	LD	HL,8000H
+BOOT2:	LD	HL,8000H
 	LD	(@civec),HL	;CONSOLE:=CON for input
 	LD	(@covec),HL	;CONSOLE:=CON for output
 	LD	HL,4000H
@@ -303,6 +323,8 @@ BOOT:	LD	B,1		;indicate cold boot
 ;
 	LD	A,3		;initialize 3 memory banks
 	OUT	(MMUINI),A
+;
+	LD	B,1		;indicate cold boot
 	JP	WBOOT1
 ;
 	CSEG
@@ -312,7 +334,7 @@ WBOOT1:	LD	SP,STACK
 ;
 ;	initialize low memory jumps in bank 1
 ;
-	LD	A,1
+	LD	A,1		;select bank 1
 	CALL	SELMEM
 ;
 	LD	A,0C3H		;jmp instruction
@@ -323,21 +345,7 @@ WBOOT1:	LD	SP,STACK
 	LD	HL,(@mxtpa)	;bdos entry point
 	LD	(BDOS+1),HL
 ;
-;	print message on cold boot
-;
-	LD	A,B
-	OR	A
-	JP	Z,LDCCP
-	LD	HL,SIGNON	;print message
-WBOOT2:	LD	A,(HL)
-	OR	A
-	JP	Z,LDCCP
-	LD	C,A
-	CALL	CONOUT
-	INC	HL
-	JP	WBOOT2
-;
-;	load ccp.com into tpa
+;	load ccp into tpa
 ;
 LDCCP:	XOR	A		;initialize fcb
 	LD	(CCPFCB+15),A
@@ -346,10 +354,9 @@ LDCCP:	XOR	A		;initialize fcb
 	LD	DE,CCPFCB	;open file ccp.com
 	LD	C,OPEN
 	CALL	BDOS
-	LD	DE,CCPOER
 	INC	A
-	JP	Z,CCPERR	;print error if file not found
-	LD	DE,0100H	;setup DMA to tpa
+	JP	Z,LDCCPS	;if file not found load from system track
+	LD	DE,TPA		;setup dma to tpa
 	LD	C,DMA
 	CALL	BDOS
 	LD	DE,128		;read up to 16KB
@@ -360,10 +367,52 @@ LDCCP:	XOR	A		;initialize fcb
 	CALL	BDOS
 	LD	DE,CCPIOE
 	INC	A
-	JP	NZ,0100H	;start ccp
-CCPERR:	LD	C,PRINT		;print error message
+	JP	NZ,TPA		;start ccp
+	LD	C,PRINT		;print error message
 	CALL	BDOS
-	HALT
+	DI
+	HALT			;and halt the machine
+LDCCPS:	LD	A,1		;select bank for dma transfer
+	CALL	SETBNK
+	LD	C,0		;select disk 0
+	CALL	SELDSK
+	LD	C,1		;select track 1
+	CALL	SETTRK
+	LD	B,CPPSECS	;b counts # of sectors to load
+	LD	D,1		;d has the next sector to read
+	LD	HL,TPA		;load address
+LDCCPS1:	
+	PUSH	BC		;save sector count
+	PUSH	DE		;save next sector to read
+	PUSH	HL		;save dma address
+	LD	C,D		;select sector
+	LD	B,0
+	CALL	SETSEC
+	POP	BC		;recall dma address to b,c
+	PUSH	BC		;replace on stack for later recall
+	CALL	SETDMA		;set dma address from b,c
+	CALL	READ		;read next sector
+	OR	A		;any errors?
+	JP	Z,LDCCPS2	;no, continue
+	LD	DE,LOADE	;print error messages
+	LD	C,PRINT
+	CALL	BDOS
+	DI
+	HALT			;and halt the machine
+LDCCPS2:
+	POP	HL		;recall dma address
+	LD	DE,128		;dma=dma+128
+	ADD	HL,DE
+	POP	DE		;recall sector address
+	POP	BC		;recall number of sectors to read
+	DEC	B		;sectors=sectors-1
+	JP	Z,LDCCPS3	;transfer to cpp if all have been loaded
+	INC	D
+	JP	LDCCPS1		;for another sector
+LDCCPS3:
+	LD	A,1		;select bank 1
+	CALL	SELMEM
+	JP	TPA		;and go to ccp
 ;
 ;	character i/o drivers
 ;
@@ -407,12 +456,18 @@ LIST:	LD	A,C
 ;
 ;	auxilary input status, 0ffh if ready, 00h if not
 ;
-AUXIST:	XOR	A		;never ready, hardware not available yet
+AUXIST:	IN	A,(AUXSTA)
+	OR	A
+	JP	Z,AUXIST1
+	XOR	A		;not reday
+	RET
+AUXIST1:
+	DEC	A		;ready
 	RET
 ;
 ;	auxilary output status, 0ffh if ready, 00h if not
 ;
-AUXOST:	XOR	A		;never ready, hadware not available yet
+AUXOST:	LD	A,0FFH		;always ready
 	RET
 ;
 ;	auxilary input
@@ -440,29 +495,21 @@ DRVTBL:	LD	HL,DRIVES
 HOME:	LD	C,0		;select track 0
 	JP	SETTRK		;we will move to 00 on first read/write
 ;
+	CSEG
+;
 ;	select disk given by register C
 ;
-SELDSK: LD	HL,0000H	;error return code
-	LD	A,C
-	LD	(DRIVE),A
-	CP	4		;disk drive 1-4?
-	JP	C,SEL1		;go
-	CP	8		;harddisk 1?
-	JP	Z,SEL1		;go
-	CP	9		;harddisk 2?
-	RET	NZ		;no, error
-;	disk number is in the proper range
-;	return proper disk parameter header address
-SEL1:	LD	L,C
+SELDSK:
+	LD	L,C
 	LD	H,0
 	ADD	HL,HL		;drive index in hl
-	LD	BC,DRIVES
-	ADD	HL,BC		;get pointer to dph
+	LD	DE,DRIVES
+	ADD	HL,DE		;get pointer to dph
 	LD	A,(HL)
 	INC	HL
 	LD	H,(HL)
 	LD	L,A
-	LD	A,(DRIVE)
+	LD	A,C
 	OUT	(FDCD),A	;selekt disk drive
 	RET
 ;
@@ -472,21 +519,36 @@ SETTRK: LD	A,C
 	OUT	(FDCT),A
 	RET
 ;
-;	set sector given by register c
+;	set sector given by register bc
 ;
 SETSEC: LD	A,C
 	OUT	(FDCS),A
+	LD	A,B
+	OUT	(FDCSH),A
 	RET
+;
+	DSEG
 ;
 ;	translate the sector given by bc using the
 ;	translate table given by de
 ;
 SECTRAN:
-	EX	DE,HL		;hl=.trans
+	LD	A,D		;do we have a translation table?
+	OR	E
+	JP	NZ,SECT1	;yes, translate
+	LD	L,C		;no, return untranslated
+	LD	H,B		;in HL
+	INC	L		;sector no. start with 1
+	RET	NZ
+	INC	H
+	RET
+SECT1:	EX	DE,HL		;hl=.trans
 	ADD	HL,BC		;hl=.trans(sector)
 	LD	L,(HL)		;l = trans(sector)
 	LD	H,0		;hl= trans(sector)
 	RET			;with value in HL
+;
+	CSEG
 ;
 ;	set dma address given by registers b and c
 ;
@@ -495,8 +557,6 @@ SETDMA: LD	A,C		;low order address
 	LD	A,B		;high order address
 	OUT	(DMAH),A
 	RET
-;
-	CSEG
 ;
 ;	perform read operation
 ;
@@ -546,7 +606,7 @@ SELMEM: OUT	(MMUSEL),A
 SETBNK: LD	(BANK),A
 	RET
 ;
-;	xmove not implemented yet, hardware missing
+;	xmove not implemented yet
 ;
 XMOVE: RET
 ;
@@ -579,4 +639,5 @@ TIME:
 	RET
 ;
 ENDDAT	EQU	$		;end
+;
 	END			;of BIOS

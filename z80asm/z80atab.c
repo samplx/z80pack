@@ -7,6 +7,7 @@
  *	28-JUN-1988 Switched to Unix System V.3
  *	22-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
+ *	18-MAR-2007 use default output file extension dependend on format
  */
 
 /*
@@ -101,12 +102,12 @@ struct sym *get_sym(char *sym_name)
  *	add symbol to symbol table symtab, or modify existing symbol
  *
  *	Input: sym_name pointer to string with symbol name
- *	       sym_wert value of symbol
+ *	       sym_val  value of symbol
  *
  *	Output: 0 symbol added/modified
  *		1 out of memory
  */
-int put_sym(char *sym_name, int sym_wert)
+int put_sym(char *sym_name, int sym_val)
 {
 	struct sym *get_sym();
 	register int hashval;
@@ -126,7 +127,7 @@ int put_sym(char *sym_name, int sym_wert)
 		np->sym_next = symtab[hashval];
 		symtab[hashval] = np;
 	}
-	np->sym_wert = sym_wert;
+	np->sym_val = sym_val;
 	return(0);
 }
 
@@ -177,7 +178,7 @@ char *strsave(char *s)
 }
 
 /*
- *	copy whole symbol hast table into allocated pointer array
+ *	copy whole symbol hash table into allocated pointer array
  *	used for sorting the symbol table later
  */
 int copy_sym(void)
@@ -236,8 +237,8 @@ void a_sort_sym(int len)
 	for (gap = len/2; gap > 0; gap /= 2)
 		for (i = gap; i < len; i++)
 			for (j = i-gap; j >= 0; j -= gap) {
-				if (numcmp(symarray[j]->sym_wert,
-				    symarray[j+gap]->sym_wert) <= 0)
+				if (numcmp(symarray[j]->sym_val,
+				    symarray[j+gap]->sym_val) <= 0)
 					break;
 				temp = symarray[j];
 				symarray[j] = symarray[j+gap];

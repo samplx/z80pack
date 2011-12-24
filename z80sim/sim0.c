@@ -19,10 +19,11 @@
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
+ * 06-OCT-07 Release 1.14 bug fixes and improvements
  */
 
 /*
- *	This modul contain the 'main()' function of the simulator,
+ *	This modul contains the 'main()' function of the simulator,
  *	where the options are checked and variables are initialized.
  *	After initialization of the UNIX interrupts ( int_on() )
  *	and initialization of the I/O simulation ( init_io() )
@@ -58,9 +59,6 @@ int main(int argc, char *argv[])
 			case 'l':	/* load core and CPU from file */
 				l_flag = 1;
 				break;
-			case 'h':	/* execute HALT opcode */
-				break_flag = 0;
-				break;
 			case 'i':	/* trap I/O on unused ports */
 				i_flag = 1;
 				break;
@@ -68,7 +66,7 @@ int main(int argc, char *argv[])
 				m_flag = exatoi(s+1);
 				s += strlen(s+1);
 				break;
-			case 'f':
+			case 'f':	/* set emulation speed */
 				f_flag = atoi(s+1);
 				s += strlen(s+1);
 				tmax = f_flag * 10000;
@@ -86,11 +84,10 @@ int main(int argc, char *argv[])
 				goto usage;
 			default:
 				printf("illegal option %c\n", *s);
-usage:				printf("usage:\t%s -s -l -i -h -mn -fn -xfilename\n", pn);
+usage:				printf("usage:\t%s -s -l -i -mn -fn -xfilename\n", pn);
 				puts("\ts = save core and cpu");
 				puts("\tl = load core and cpu");
 				puts("\ti = trap on I/O to unused ports");
-				puts("\th = execute HALT op-code");
 				puts("\tm = init memory with n");
 				puts("\tf = CPU frequenzy n in MHz");
 				puts("\tx = load and execute filename");

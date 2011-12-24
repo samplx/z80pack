@@ -7,6 +7,7 @@
  *	28-JUN-1988 Switched to Unix System V.3
  *	22-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
+ *	18-MAR-2007 use default output file extension dependend on format
  */
 
 /*

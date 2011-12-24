@@ -7,6 +7,7 @@
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
+ *	18-MAR-2007 use default output file extension dependend on format
  */
 
 /*
@@ -115,7 +116,7 @@ hyp_error:
 			if (strlen(word) > SYMSIZE)
 				word[SYMSIZE] = '\0';
 			if ((sp = get_sym(word)) != NULL)
-				val = sp->sym_wert;
+				val = sp->sym_val;
 			else
 				asmerr(E_UNDSYM);
 			break;

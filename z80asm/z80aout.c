@@ -7,6 +7,7 @@
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
+ *	18-MAR-2007 use default output file extension dependend on format
  */
 
 /*
@@ -182,7 +183,7 @@ void lst_sym(void)
 					p_line += 1;
 				}
 				fprintf(lstfp, "%-8s %04x\t", np->sym_name,
-					np->sym_wert & 0xffff);
+					np->sym_val & 0xffff);
 				if (++j == 4) {
 					fprintf(lstfp, "\n");
 					if (p_line++ >= ppl)
@@ -210,7 +211,7 @@ void lst_sort_sym(int len)
 			p_line += 1;
 		}
 		fprintf(lstfp, "%-8s %04x\t", symarray[i]->sym_name,
-			symarray[i]->sym_wert & 0xffff);
+			symarray[i]->sym_val & 0xffff);
 		if (++j == 4) {
 			fprintf(lstfp, "\n");
 			if (p_line++ >= ppl)
@@ -252,7 +253,7 @@ void obj_end(void)
 		break;
 	case OUTHEX:
 		flush_hex();
-		fprintf(objfp, ":0000000000\n");
+		fprintf(objfp, ":00000001FF\n");
 		break;
 	}
 }
@@ -344,7 +345,7 @@ void btoh(unsigned char byte, char **p)
 }
 
 /*
- *	computer checksum for Intel hex record
+ *	compute checksum for Intel hex record
  */
 int chksum(void)
 {

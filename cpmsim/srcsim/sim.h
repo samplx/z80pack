@@ -19,6 +19,7 @@
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
+ * 06-OCT-07 Release 1.14 bug fixes and improvements
  */
 
 /*
@@ -43,7 +44,7 @@
  *	The following lines of this file should not be modified by user
  */
 #define COPYR	"Copyright (C) 1987-2007 by Udo Munk"
-#define RELEASE	"1.13"
+#define RELEASE	"1.14"
 
 #define LENCMD		80		/* length of command buffers etc */
 

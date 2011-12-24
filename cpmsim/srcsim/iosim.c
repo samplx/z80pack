@@ -22,6 +22,7 @@
  * 14-DEC-06 started adding serial port for a client TCP/IP socket
  * 25-DEC-06 CPU speed option and 100 ticks interrupt
  * 19-FEB-07 improved networking
+ * 22-JUL-07 added second FDC sector port for implementing large harddisks
  */
 
 /*
@@ -41,12 +42,14 @@
  *
  *	10 - FDC drive
  *	11 - FDC track
- *	12 - FDC sector
+ *	12 - FDC sector (low)
  *	13 - FDC command
  *	14 - FDC status
  *
  *	15 - DMA destination address low
  *	16 - DMA destination address high
+ *
+ *	17 - FDC sector high
  *
  *	20 - MMU initialization
  *	21 - MMU bank select
@@ -105,7 +108,7 @@ struct dskdef {
 
 static BYTE drive;		/* current drive A..P (0..15) */
 static BYTE track;		/* current track (0..255) */
-static BYTE sector;		/* current sektor (0..255) */
+static int sector;		/* current sektor (0..65535) */
 static BYTE status;		/* status of last I/O operation on FDC */
 static BYTE dmadl;		/* current DMA address destination low */
 static BYTE dmadh;		/* current DMA address destination high */
@@ -169,7 +172,7 @@ static struct dskdef disks[16] = {
 	{ "disks/drivem.cpm", &drivem, -1, -1 },
 	{ "disks/driven.cpm", &driven, -1, -1 },
 	{ "disks/driveo.cpm", &driveo, -1, -1 },
-	{ "disks/drivep.cpm", &drivep, -1, -1 }
+	{ "disks/drivep.cpm", &drivep, 256, 16384 }
 };
 
 /*
@@ -207,6 +210,7 @@ static BYTE auxd_in(void), auxd_out(BYTE), auxs_in(void), auxs_out(BYTE);
 static BYTE fdcd_in(void), fdcd_out(BYTE);
 static BYTE fdct_in(void), fdct_out(BYTE);
 static BYTE fdcs_in(void), fdcs_out(BYTE);
+static BYTE fdcsh_in(void), fdcsh_out(BYTE);
 static BYTE fdco_in(void), fdco_out(BYTE);
 static BYTE fdcx_in(void), fdcx_out(BYTE);
 static BYTE dmal_in(void), dmal_out(BYTE);
@@ -253,7 +257,7 @@ static BYTE (*port[256][2]) () = {
 	{ fdcx_in, fdcx_out },		/* port 14 */
 	{ dmal_in, dmal_out },		/* port 15 */
 	{ dmah_in, dmah_out },		/* port 16 */
-	{ io_trap, io_trap  },		/* port 17 */
+	{ fdcsh_in, fdcsh_out },	/* port 17 */
 	{ io_trap, io_trap  },		/* port 18 */
 	{ io_trap, io_trap  },		/* port 19 */
 	{ mmui_in, mmui_out },		/* port 20 */
@@ -1310,21 +1314,40 @@ static BYTE fdct_out(BYTE data)
 }
 
 /*
- *	I/O handler for read FDC sector
- *	return the current sector
+ *	I/O handler for read FDC sector low
+ *	return low byte of the current sector
  */
 static BYTE fdcs_in(void)
 {
-	return((BYTE) sector);
+	return((BYTE) sector & 0xff);
 }
 
 /*
- *	I/O handler for write FDC sector:
- *	set the current sector
+ *	I/O handler for write FDC sector low
+ *	set low byte of the current sector
  */
 static BYTE fdcs_out(BYTE data)
 {
-	sector = data;
+	sector = (sector & 0xff00) + data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read FDC sector high
+ *	return high byte of the current sector
+ */
+static BYTE fdcsh_in(void)
+{
+	return((BYTE) sector >> 8);
+}
+
+/*
+ *	I/O handler for write FDC sector high
+ *	set high byte of the current sector
+ */
+static BYTE fdcsh_out(BYTE data)
+{
+	sector = (sector & 0xff) + (data << 8);
 	return((BYTE) 0);
 }
 
@@ -1354,7 +1377,7 @@ static BYTE fdco_in(void)
  */
 static BYTE fdco_out(BYTE data)
 {
-	register long pos;
+	register unsigned long pos;
 	if (disks[drive].fd == NULL) {
 		status = 1;
 		return((BYTE) 0);

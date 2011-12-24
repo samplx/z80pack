@@ -1,7 +1,7 @@
-	TITLE	'Test programm for Z80-Disassembler'
+	TITLE	'Test program for Z80-Disassembler'
 
 ;==========================================================================
-;	Test programm for Z80-Disassembler
+;	Test program for Z80-Disassembler
 ;==========================================================================
 
 	LD	SP,STACK	; initialize stack for simulator
