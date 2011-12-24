@@ -1,0 +1,63 @@
+/*
+ * Z80SIM  -  a	Z80-CPU	simulator
+ *
+ * Copyright (C) 1987-2006 by Udo Munk
+ *
+ * History:
+ * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
+ * 11-JAN-89 Release 1.1
+ * 08-FEB-89 Release 1.2
+ * 13-MAR-89 Release 1.3
+ * 09-FEB-90 Release 1.4 Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5 Ported to COHERENT 3.0
+ * 10-JUN-92 Release 1.6 long casting problem solved with COHERENT 3.2
+ *			 and some optimization
+ * 25-JUN-92 Release 1.7 comments in english and ported to COHERENT 4.0
+ * 04-OCT-06 Release 1.8 modified to compile on modern POSIX OS's
+ */
+
+/*
+ *	This modul contains some commonly used functions
+ */
+
+#include <unistd.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <termios.h>
+#include "sim.h"
+
+/*
+ *	atoi for hexadecimal numbers
+ */
+int exatoi(char *str)
+{
+	register int num = 0;
+
+	while (isxdigit(*str)) {
+		num *= 16;
+		if (*str <= '9')
+			num += *str - '0';
+		else
+			num += toupper(*str) - '7';
+		str++;
+	}
+	return(num);
+}
+
+/*
+ *	Wait for a single keystroke without echo
+ */
+int getkey(void)
+{
+	register int c;
+	struct termios old_term, new_term;
+
+	tcgetattr(0, &old_term);
+	new_term = old_term;
+	new_term.c_lflag &= ~(ICANON | ECHO);
+	new_term.c_cc[VMIN] = 1;
+	tcsetattr(0, TCSADRAIN, &new_term);
+	c = getchar();
+	tcsetattr(0, TCSADRAIN, &old_term);
+	return(c);
+}
