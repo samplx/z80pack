@@ -21,6 +21,7 @@
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
+ * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
  */
 
 #include <unistd.h>
@@ -499,6 +500,7 @@ static int op_nop(void)			/* NOP */
 
 static int op_halt(void)		/* HALT */
 {
+	extern int busy_loop_cnt[];
 	struct timespec timer;
 
 	if (IFF == 0)	{
@@ -507,10 +509,13 @@ static int op_halt(void)		/* HALT */
 	} else
 		while (int_type	== 0) {
 			timer.tv_sec = 0;
-			timer.tv_nsec = 10000000;
+			timer.tv_nsec = 1000000L;
 			nanosleep(&timer, NULL);
 			R += 9999;
 		}
+
+	busy_loop_cnt[0] = 0;
+
 	return(0);
 }
 

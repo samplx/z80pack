@@ -4,7 +4,8 @@
  * Copyright (C) 1987-2008 by Udo Munk
  *
  * This modul contains a complex I/O-simulation for running
- * CP/M 1, CP/M 2, CP/M 3, MP/M...
+ * CP/M, MP/M, UCSD p-System...
+ *
  * Please note this doesn't emulate any hardware which
  * ever existed, we've got all virtual circuits in here!
  *
@@ -32,6 +33,8 @@
  * 17-DEC-07 conditional compile async TCP/IP server, problems with Cygwin
  * 03-FEB-08 added hardware control port to reset CPU, MMU and abort sim
  * 07-APR-08 added port to set/get CPU speed
+ * 13-AUG-08 work on console I/O busy waiting detection
+ * 24-AUG-08 changed terminal line discipline to not add CR if LF send
  */
 
 /*
@@ -103,6 +106,9 @@
 #include <netinet/in.h>
 #include "sim.h"
 #include "simglb.h"
+
+#define MAX_BUSY_COUNT	10	/* max counter to detect I/O busy waiting
+				   on the console status port */
 
 extern int boot(void);
 
@@ -253,9 +259,12 @@ static BYTE cond2_in(void), cond2_out(BYTE), cons2_in(void), cons2_out(BYTE);
 static BYTE cond3_in(void), cond3_out(BYTE), cons3_in(void), cons3_out(BYTE);
 static BYTE cond4_in(void), cond4_out(BYTE), cons4_in(void), cons4_out(BYTE);
 static BYTE netd1_in(void), netd1_out(BYTE), nets1_in(void), nets1_out(BYTE);
-static void int_timer(int);
 
+/*
+ *	Forward declaration of support functions
+ */
 static int to_bcd(int), get_date(struct tm *);
+static void int_timer(int);
 
 #ifdef NETWORKING
 static void net_server_config(void), net_client_config(void);
@@ -331,7 +340,7 @@ static BYTE (*port[256][2]) () = {
  *	This function initializes the I/O handlers:
  *	1. Initialize all unused ports with the I/O trap handler.
  *	2. Initialize the MMU with NULL pointers and defaults.
- *	3. Open the files which emulates the disk drives.
+ *	3. Open the files which emulate the disk drives.
  *	   Errors for opening one of the drives results
  *	   in a NULL pointer for fd in the dskdef structure,
  *	   so that this drive can't be used.
@@ -599,6 +608,8 @@ BYTE io_in(BYTE adr)
  */
 BYTE io_out(BYTE adr, BYTE data)
 {
+	busy_loop_cnt[0] = 0;
+
 	(*port[adr][1]) (data);
 	return((BYTE) 0);
 }
@@ -631,6 +642,15 @@ static BYTE cons_in(void)
 	if (cntl_bs)
 		return((BYTE) 0xff);
 	else {
+		if (++busy_loop_cnt[0] >= MAX_BUSY_COUNT) {
+			struct timespec timer;
+
+			timer.tv_sec = 0;
+			timer.tv_nsec = 1000000L;
+			nanosleep(&timer, NULL);
+			busy_loop_cnt[0] = 0;
+			//putchar('~'); fflush(stdout);
+		}
 		flags = fcntl(0, F_GETFL, 0);
 		fcntl(0, F_SETFL, flags | O_NDELAY);
 		readed = read(0, &last_char, 1);
@@ -1025,6 +1045,8 @@ static BYTE nets1_out(BYTE data)
 static BYTE cond_in(void)
 {
 	char c;
+
+	busy_loop_cnt[0] = 0;
 
 	aborted:
 	if (last_char) {
@@ -1763,13 +1785,13 @@ static BYTE mmui_out(BYTE data)
 	if (mmu[0] != NULL)
 		return((BYTE) 0);
 	if (data > MAXSEG) {
-		printf("Try to init %d banks, available %d banks\n",
+		printf("Try to init %d banks, available %d banks\r\n",
 		       data, MAXSEG);
 		exit(1);
 	}
 	for (i = 0; i < data; i++) {
 		if ((mmu[i] = malloc(segsize)) == NULL) {
-			printf("can't allocate memory for bank %d\n", i+1);
+			printf("can't allocate memory for bank %d\r\n", i+1);
 			exit(1);
 		}
 	}
@@ -1798,10 +1820,10 @@ static BYTE mmus_out(BYTE data)
 	if (data == selbnk)
 		return((BYTE) 0);
 	if (data > maxbnk) {
-		printf("Try to select unallocated bank %d\n", data);
+		printf("Try to select unallocated bank %d\r\n", data);
 		exit(1);
 	}
-	//printf("SIM: memory select bank %d from %d\n", data, PC-ram);
+	//printf("SIM: memory select bank %d from %d\r\n", data, PC-ram);
 	memcpy(mmu[selbnk], (char *) ram, segsize);
 	memcpy((char *) ram, mmu[data], segsize);
 	selbnk = data;
@@ -1825,7 +1847,7 @@ static BYTE mmuc_in(void)
 static BYTE mmuc_out(BYTE data)
 {
 	if (mmu[0] != NULL) {
-		printf("Not possible to resize already allocated segments\n");
+		printf("Not possible to resize already allocated segments\r\n");
 		exit(1);
 	}
 	segsize = data << 8;

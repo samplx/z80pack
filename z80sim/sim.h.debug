@@ -23,6 +23,7 @@
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
+ * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
  */
 
 /*
@@ -55,7 +56,7 @@
  *	The following lines of this file should not be modified by user
  */
 #define	COPYR	"Copyright (C) 1987-2008 by Udo Munk"
-#define	RELEASE	"1.15"
+#define	RELEASE	"1.16"
 
 #define	LENCMD		80		/* length of command buffers etc */
 

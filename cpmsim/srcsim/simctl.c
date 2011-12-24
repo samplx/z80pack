@@ -21,6 +21,7 @@
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
+ * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
  */
 
 #include <unistd.h>
@@ -44,12 +45,12 @@ struct termios old_term, new_term;
  */
 void mon(void)
 {
-
 	tcgetattr(0, &old_term);
 	new_term = old_term;
 	new_term.c_lflag &= ~(ICANON | ECHO);
 	new_term.c_iflag &= ~(IXON | IXANY | IXOFF);
 	new_term.c_iflag &= ~(IGNCR | ICRNL | INLCR);
+	new_term.c_oflag &= ~(ONLCR | OCRNL);
 	new_term.c_cc[VMIN] = 1;
 #ifndef CNTL_Z
 	new_term.c_cc[VSUSP] = 0;
@@ -107,7 +108,7 @@ int boot(void)
 {
 	register int fd;
 
-	puts("\nBooting...\n");
+	puts("\r\nBooting...\r\n");
 
 	if (l_flag) {
 		return(load_core());
@@ -119,13 +120,13 @@ int boot(void)
 
 	if ((fd = open("disks/drivea.cpm", O_RDONLY)) == -1) {
 		perror("file disks/drivea.cpm");
-		puts("\n");
+		puts("\r\n");
 		close(fd);
 		return(1);
 	}
 	if (read(fd, (char *) ram, 128) != 128) {
 		perror("file disks/drivea.cpm");
-		puts("\n");
+		puts("\r\n");
 		close(fd);
 		return(1);
 	}

@@ -1,20 +1,20 @@
 	Quickstart to run CP/M and MP/M on the Z80-CPU simulation
 
-1. Change to directory ~/z80pack/cpmsim/srcsim
+1. Change to directory ~/z80pack-x.y/cpmsim/srcsim
    make
    make clean
 This compiles the CPU and hardware emulation needed to run CP/M and MP/M.
 
-2. Change to directory ~/z80pack/cpmsim/srctools
+2. Change to directory ~/z80pack-x.y/cpmsim/srctools
    make
    make clean
 This compiles additional support programs, see below.
 
 3. Make backup copies of your distribution disks!
-   cd ~/z80pack/cpmsim/disks/library
+   cd ~/z80pack-x.y/cpmsim/disks/library
    cp *.dsk ../backups
 
-4. Change to directory ~/z80pack/cpmsim
+4. Change to directory ~/z80pack-x.y/cpmsim
    ./cpm2 - run CP/M 2.2
    ./cpm3 - run CP/M 3.0
    ./mpm  - this boots CP/M 2, run command mpmldr to boot MP/M 2

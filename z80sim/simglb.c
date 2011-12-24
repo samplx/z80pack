@@ -21,6 +21,7 @@
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
+ * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
  */
 
 /*
@@ -28,6 +29,8 @@
  */
 
 #include "sim.h"
+
+#define MAXCHAN	5	/* max number of channel for I/O busy detect */
 
 /*
  *	CPU Registers
@@ -49,7 +52,7 @@ long R;				/* Z80 refresh register */
 /*
  *	Variables for memory of the emulated CPU
  */
-BYTE ram[65536L];		/* 64KB RAM */
+BYTE ram[65536];		/* 64KB RAM */
 BYTE *wrk_ram;			/* workpointer into memory for dump etc. */
 
 /*
@@ -99,6 +102,11 @@ int tmax;			/* max t-stats to execute in 10ms */
 int int_mode;			/* CPU interrupt mode (IM 0, IM 1, IM 2) */
 int cntl_c;			/* flag	for cntl-c entered */
 int cntl_bs;			/* flag	for cntl-\ entered */
+
+/*
+ *	Variables for I/O support
+ */
+int busy_loop_cnt[MAXCHAN];	/* counters for I/O busy loop detection */
 
 /*
  *	Table to get parrity as fast as possible
