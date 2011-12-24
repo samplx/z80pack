@@ -7,8 +7,10 @@
 ;
 ;	i/o ports
 ;
-CONSTA	EQU	0		;console status port
-CONDAT	EQU	1		;console data port
+CON0STA	EQU	0		;console 0 status port
+CON0DAT	EQU	1		;console 0 data port
+CON1STA	EQU	40		;console 1 status port
+CON1DAT	EQU	41		;console 1 data port
 PRTSTA	EQU	2		;printer status port
 PRTDAT	EQU	3		;printer data port
 AUXSTA	EQU	4		;auxilary status port
@@ -22,25 +24,14 @@ DMAL	EQU	15		;dma-port: dma address low
 DMAH	EQU	16		;dma-port: dma address high
 MMUINI	EQU	20		;initialize mmu
 MMUSEL	EQU	21		;bank select mmu
-CLKCMD	EQU	25		;clock command
-CLKDAT	EQU	26		;clock data
 TIMER	EQU	27		;interrupt timer
 ;
-;	clock commands
-;
-GETSEC	EQU	0		;get seconds
-GETMIN	EQU	1		;get minutes
-GETHOU	EQU	2		;get hours
-GETDAL	EQU	3		;get days low
-GETDAH	EQU	4		;get days high
-;
-BDOS	EQU	5		;bdos calls
-SETTD	EQU	104		;bdos set time and date
-;
 POLL	EQU	131		;xdos poll function
-PLCI0	EQU	0		;poll console in #0
+PLCO0	EQU	0		;poll console out #0
+PLCI0	EQU	1		;poll console in #0
+PLCO1	EQU	2		;poll console out #1
+PLCI1	EQU	3		;poll console in #1
 FLAGSET	EQU	133		;xdos flag set function
-SYSDATA	EQU	154		;xdos syste data address
 ;
 ;	jump vector for individual subroutines
 ;
@@ -89,28 +80,17 @@ WARMSTART:
 CONST:
 	CALL	PTBLJMP		;compute and jump to handler
 	DW	PTSTI0
+	DW	PTSTI1
 ;
 CONIN:
 	CALL	PTBLJMP		;compute and jump to handle
 	DW	PTIN0
+	DW	PTIN1
 ;
 CONOUT:
 	CALL	PTBLJMP		;compute and jump to handler
 	DW	PTOUT0
-;
-PTSTI0:	IN	A,(CONSTA)	;console 0 input
-	RET
-;
-PTIN0:	LD	C,POLL		;poll console 0 status in
-	LD	E,PLCI0
-	CALL	XDOS		;poll console 0
-	IN	A,(CONDAT)	;read character
-	AND	7FH		;strip parity
-	RET
-;
-PTOUT0:	LD	A,C		;console 0 output
-	OUT	(CONDAT),A
-	RET
+	DW	PTOUT1
 ;
 PTBLJMP:			;compute and jump to handler
 	LD	A,D
@@ -124,6 +104,52 @@ PTBLJMP:			;compute and jump to handler
 	LD	D,(HL)
 	EX	DE,HL
 	JP	(HL)		;jump to computed handler
+;
+PTSTI0:	IN	A,(CON0STA)	;console 0 input status
+	RET
+;
+PTSTO0:	LD	A,0FFH		;console 0 output status
+	RET
+;
+PTIN0:	LD	C,POLL		;poll console 0 status in
+	LD	E,PLCI0
+	CALL	XDOS		;poll console 0
+	IN	A,(CON0DAT)	;read character
+	RET
+;
+PTOUT0:	LD	A,C		;console 0 output
+	OUT	(CON0DAT),A
+	RET
+;
+PTSTI1:	IN	A,(CON1STA)	;console 1 input status
+	AND	1		;input ready?
+	RET	Z		;no return with A = 0
+	LD	A,0FFH		;input ready
+	RET
+;
+PTSTO1:	IN	A,(CON1STA)	;console 1 output status
+	AND	2		;output ready?
+	RET	Z		;no, return with A = 0
+	LD	A,0FFH		;output ready
+	RET
+;
+PTIN1:	LD	C,POLL		;poll console 1 status in
+	LD	E,PLCI1
+	CALL	XDOS		;poll console 1
+	IN	A,(CON1DAT)	;read character
+	RET
+;
+PTOUT1:	IN	A,(CON1STA)	;console 1 output status
+	AND	2		;ready?
+	JP	NZ,TXRDY1	;yes, output
+	PUSH	BC
+	LD	C,POLL		;poll console 1 status out
+	LD	E,PLCO1
+	CALL	XDOS
+	POP	BC
+TXRDY1:	LD	A,C		;console 1 output
+	OUT	(CON1DAT),A
+	RET
 ;
 LIST:
 	LD	A,C
@@ -150,7 +176,33 @@ SELMEMORY:
 ;	poll character devices
 ;
 POLLDEVICE:
-	JP	PTSTI0		;poll console 0 status in
+	LD	A,C
+	CP	NMBDEV		;device to poll in range?
+	JP	C,DEVOK		;ok, poll it
+	LD	A,NMBDEV	;no, set to max dev
+DEVOK:	CALL	TBLJMP		;and jump to device poll code
+DEVTBL:	DW	PTSTO0		;poll console o status out
+	DW	PTSTI0		;poll console 0 status in
+	DW	PTSTO1		;poll console 1 status out
+	DW	PTSTI1		;poll console 1 status in
+NMBDEV	EQU	($-DEVTBL)/2	;number of devices to poll
+	DW	RTNEMPTY	;bad device handler
+;
+TBLJMP:				;compute and jump to handler, a = table index
+	ADD	A,A		;double table index
+	POP	HL		;get address of table
+	LD	E,A		;compute table offeset
+	LD	D,0
+	ADD	HL,DE
+	LD	E,(HL)		;get handler address
+	INC	HL
+	LD	D,(HL)
+	EX	DE,HL
+	JP	(HL)		;jump to handler
+;
+RTNEMPTY:			;bad device, never ready
+	XOR	A
+	RET
 ;
 ;	start clock
 ;
@@ -179,7 +231,7 @@ EXITREGION:
 ;	maximum console number
 ;
 MAXCONSOLE:
-	LD	A,1
+	LD	A,2
 	RET
 ;
 ;	system initialization
@@ -188,13 +240,6 @@ MAXCONSOLE:
 ;		HL	BIOS jump table address
 ;
 SYSTEMINIT:
-;
-				;doesn't work
-	PUSH	HL
-	LD	C,SYSDATA	;get system data page address
-	CALL	XDOS
-	CALL	SETTOD		;set tod from hardware clock
-	POP	HL
 ;
 	LD	A,8		;initialize banked memory
 	OUT	(MMUINI),A
@@ -217,7 +262,7 @@ SYS1:	DEC	B
 SYS2:	LD	A,(HL)
 	OR	A
 	JP	Z,SYS3
-	OUT	(CONDAT),A
+	OUT	(CON0DAT),A
 	INC	HL
 	JP	SYS2
 ;
@@ -225,30 +270,6 @@ SYS3:	IM	1
 	LD	A,1		;enable 20ms interrupt timer
 	OUT	(TIMER),A
 	EI
-	RET
-;
-;	set mp/m tod from hardware clock
-;	hl = tod address
-;
-SETTOD:	LD	A,GETDAL
-	OUT	(CLKCMD),A
-	IN	A,(CLKDAT)
-	LD	(HL),A
-	INC	HL
-	LD	A,GETDAH
-	OUT	(CLKCMD),A
-	IN	A,(CLKDAT)
-	LD	(HL),A
-	INC	HL
-	LD	A,GETHOU
-	OUT	(CLKCMD),A
-	IN	A,(CLKDAT)
-	LD	(HL),A
-	INC	HL
-	LD	A,GETMIN
-	OUT	(CLKCMD),A
-	IN	A,(CLKDAT)
-	LD	(HL),A
 	RET
 ;
 ;	idle
@@ -325,10 +346,15 @@ SELDSK: LD	HL,0000H	;error return code
 	LD	DE,DPBASE
 	ADD	HL,DE		;HL=.dpbase(diskno*16)
 	RET
-SELHD:	CP	8		;select the harddisk?
+SELHD:	CP	9		;select harddisk 2?
+	JP	Z,SELHD2	;yes, select it
+	CP	8		;select harddisk 1?
 	RET	NZ		;no, error
-	OUT	(FDCD),A	;select disk drive
-	LD	HL,HDBASE	;HL=hdbase for harddisk
+	OUT	(FDCD),A	;yes, select it
+	LD	HL,HD1		;HL=hdbase for harddisk 1
+	RET
+SELHD2:	OUT	(FDCD),A	;select disk drive
+	LD	HL,HD2		;HL=hdbase for harddisk 2
 	RET
 ;
 ;	set track given by register c
@@ -363,12 +389,14 @@ SETDMA: LD	A,C		;low order address
 ;
 ;	perform read operation
 ;
-READ:	XOR	A		;read command -> A
+READ:	CALL	SWTUSER		;switch to user page
+	XOR	A		;read command -> A
 	JP	WAITIO		;to perform the actual i/o
 ;
 ;	perform a write operation
 ;
-WRITE:	LD	A,1		;write command -> A
+WRITE:	CALL	SWTUSER		;switch to user page
+	LD	A,1		;write command -> A
 ;
 ;	enter here from read and write to perform the actual i/o
 ;	operation.  return a 00h in register a if the operation completes
@@ -380,19 +408,19 @@ WRITE:	LD	A,1		;write command -> A
 ;			the dma address in 'dmaad' (0-65535)
 ;
 WAITIO: OUT	(FDCOP),A	;start i/o operation
+	CALL	SWTSYS		;switch back to system page
 	IN	A,(FDCST)	;status of i/o operation -> A
 	RET
 ;
 ;	XIOS data segment
 ;
 SIGNON:	DEFB	13,10
-	DEFM	'MP/M 2 XIOS V1.1 for Z80SIM, '
+	DEFM	'MP/M 2 XIOS V1.4 for Z80SIM, '
 	DEFM	'Copyright 1989-2006 by Udo Munk'
 	DEFB	13,10,0
 ;
 TICKN:	DEFB	0		;flag for tick
 PREEMP:	DEFB	0		;preempted flag
-TOD:	DEFS	4		;time of day
 SVDHL:	DEFS	2		;save hl during interrupt
 SVDRET:	DEFS	2		;save return address during interrupt
 SVDSP:	DEFS	2		;save sp during interrupt
@@ -451,15 +479,20 @@ DPBLK:  DEFW	26		;sectors per track
 	DEFW	16		;check size
 	DEFW	2		;track offset
 ;
-;	fixed data tables for 4MB harddisk
+;	fixed data tables for 4MB harddisks
 ;
 ;	disk parameter header
-HDBASE:	DEFW	HDTRA,0000H
+HD1:	DEFW	HDTRA,0000H
 	DEFW	0000H,0000H
 	DEFW	DIRBF,HDBLK
-	DEFW	CHKHD,ALLHD
+	DEFW	CHKH1,ALLH1
 ;
-;	sector translate vector for the hardisk
+HD2:	DEFW	HDTRA,0000H
+	DEFW	0000H,0000H
+	DEFW	DIRBF,HDBLK
+	DEFW	CHKH2,ALLH2
+;
+;	sector translate vector for the hardisks
 ;
 HDTRA:	DEFB	1,2,3,4,5,6,7,8,9,10
 	DEFB	11,12,13,14,15,16,17,18,19,20
@@ -475,7 +508,7 @@ HDTRA:	DEFB	1,2,3,4,5,6,7,8,9,10
 	DEFB	111,112,113,114,115,116,117,118,119,120
 	DEFB	121,122,123,124,125,126,127,128
 ;
-;       disk parameter block for harddisk
+;       disk parameter block for harddisks
 ;
 HDBLK:  DEFW    128		;sectors per track
 	DEFB    4		;block shift factor
@@ -493,11 +526,13 @@ ALL00:	DEFS	31		;allocation vector 0
 ALL01:	DEFS	31		;allocation vector 1
 ALL02:	DEFS	31		;allocation vector 2
 ALL03:	DEFS	31		;allocation vector 3
-ALLHD:	DEFS	255		;allocation vector harddisk
+ALLH1:	DEFS	255		;allocation vector harddisk 1
+ALLH2:	DEFS	255		;allocation vector harddisk 2
 CHK00:	DEFS	16		;check vector 0
 CHK01:	DEFS	16		;check vector 1
 CHK02:	DEFS	16		;check vector 2
 CHK03:	DEFS	16		;check vector 3
-CHKHD:	DEFS	0		;check vector harddisk
+CHKH1:	DEFS	0		;check vector harddisk 1
+CHKH2:	DEFS	0		;check vector harddisk 2
 ;
 	END

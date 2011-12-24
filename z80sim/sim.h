@@ -10,12 +10,14 @@
  * 11-JAN-89 Release 1.1
  * 08-FEB-89 Release 1.2
  * 13-MAR-89 Release 1.3
- * 09-FEB-90 Release 1.4 Ported to TARGON/31 M10/30
- * 20-DEC-90 Release 1.5 Ported to COHERENT 3.0
- * 10-JUN-92 Release 1.6 long casting problem solved with COHERENT 3.2
- *			 and some optimization
- * 25-JUN-92 Release 1.7 comments in english
- * 03-OCT-06 Release 1.8 modified to compile on modern POSIX OS's
+ * 09-FEB-90 Release 1.4  Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5  Ported to COHERENT 3.0
+ * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
+ *			  and some optimization
+ * 25-JUN-92 Release 1.7  comments in english
+ * 03-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 18-NOV-06 Release 1.9  work on CP/M emulation
+ * 08-DEC-06 Release 1.10 work on CP/M emulation
  */
 
 /*
@@ -47,7 +49,7 @@
  *	The following lines of this file should not be modified by user
  */
 #define	COPYR	"Copyright (C) 1987-2006 by Udo Munk"
-#define	RELEASE	"1.9"
+#define	RELEASE	"1.10"
 
 #define	LENCMD		80		/* length of command buffers etc */
 

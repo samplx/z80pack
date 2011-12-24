@@ -17,6 +17,8 @@
  * 25-JUN-92 Comments in english and ported to COHERENT 4.0
  * 05-OCT-06 modified to compile on modern POSIX OS's
  * 18-NOV-06 added a second harddisk
+ * 08-DEC-06 modified MMU so that segment size can be configured
+ * 10-DEC-06 started adding serial port for a passive TCP/IP socket
  */
 
 /*
@@ -45,10 +47,14 @@
  *
  *	20 - MMU initialization
  *	21 - MMU bank select
+ *	22 - MMU select segment size (in pages a 256 bytes)
  *
  *	25 - clock command
  *	26 - clock data
  *	27 - 20ms timer causing INT, only usable in IM 1
+ *
+ *	40 - passive socket status
+ *	41 - passive socket data
  *
  */
 
@@ -60,11 +66,15 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/poll.h>
+#include <netinet/in.h>
 #include "sim.h"
 #include "simglb.h"
 
 /*
- *	Structure to describe a emulated floppy disk drive:
+ *	Structure to describe an emulated disk drive:
  *		pointer to filename
  *		pointer to file descriptor
  *		number of tracks
@@ -107,6 +117,8 @@ static int auxout;	/* fd for pipe "auxout" */
 static int aux_in_eof;	/* status of pipe "auxin" (<>0 means EOF) */
 static int pid_rec;	/* PID of the receiving process for auxiliary */
 static char last_char;	/* buffer for 1 character (console status) */
+static int s1;		/* server socket descriptor */
+static int s1a;		/* connected server socket descriptor */
 
 static struct dskdef disks[16] = {
 	{ "disks/drivea.cpm", &drivea, 77, 26 },
@@ -139,12 +151,18 @@ static struct dskdef disks[16] = {
  * 48KB |        |  |        |  ..........  |        |
  *      | bank 0 |  | bank 1 |              | bank n |
  *      +--------+  +--------+  ..........  +--------+
+ *
+ * This is an example for 48KB segements as it was implemented originaly.
+ * The segment size now can be configured via port 22.
+ * If the segment size isn't configured the default is 48KB as it was
+ * before, to maintain compatibility.
  */
 #define MAXSEG 16		/* max. number of memory banks */
-#define SEGSIZ 49152		/* size of one bank = 48KBytes */
+#define SEGSIZ 49152		/* default size of one bank = 48KBytes */
 static char *mmu[MAXSEG];	/* MMU with pointers to the banks */
 static int selbnk;		/* current bank */
 static int maxbnk;		/* number of initialized banks */
+static int segsize;		/* segment size of one bank, default 48KB */
 
 /*
  *	Forward declaration of the I/O handlers for all used ports
@@ -161,14 +179,16 @@ static BYTE fdcx_in(void), fdcx_out(BYTE);
 static BYTE dmal_in(void), dmal_out(BYTE);
 static BYTE dmah_in(void), dmah_out(BYTE);
 static BYTE mmui_in(void), mmui_out(BYTE), mmus_in(void), mmus_out(BYTE);
+static BYTE mmuc_in(void), mmuc_out(BYTE);
 static BYTE clkc_in(void), clkc_out(BYTE), clkd_in(void), clkd_out(BYTE);
 static BYTE time_in(void), time_out(BYTE);
-static void int_timer(int);
+static BYTE cond1_in(void), cond1_out(BYTE), cons1_in(void), cons1_out(BYTE);
+static void int_timer(int), int_io(int);
 
 static int to_bcd(int), get_date(struct tm *);
 
 /*
- *	This array contains two function pointer for every
+ *	This array contains two function pointers for every
  *	active port, one for input and one for output.
  */
 static BYTE (*port[256][2]) () = {
@@ -194,18 +214,35 @@ static BYTE (*port[256][2]) () = {
 	{ io_trap, io_trap  },		/* port 19 */
 	{ mmui_in, mmui_out },		/* port 20 */
 	{ mmus_in, mmus_out },		/* port 21 */
-	{ io_trap, io_trap  },		/* port 22 */
+	{ mmuc_in, mmuc_out },		/* port 22 */
 	{ io_trap, io_trap  },		/* port 23 */
 	{ io_trap, io_trap  },		/* port 24 */
 	{ clkc_in, clkc_out },		/* port 25 */
 	{ clkd_in, clkd_out },		/* port 26 */
-	{ time_in, time_out }		/* port 27 */
+	{ time_in, time_out },		/* port 27 */
+	{ io_trap, io_trap  },		/* port 28 */
+	{ io_trap, io_trap  },		/* port 29 */
+	{ io_trap, io_trap  },		/* port 30 */
+	{ io_trap, io_trap  },		/* port 31 */
+	{ io_trap, io_trap  },		/* port 32 */
+	{ io_trap, io_trap  },		/* port 33 */
+	{ io_trap, io_trap  },		/* port 34 */
+	{ io_trap, io_trap  },		/* port 35 */
+	{ io_trap, io_trap  },		/* port 36 */
+	{ io_trap, io_trap  },		/* port 37 */
+	{ io_trap, io_trap  },		/* port 38 */
+	{ io_trap, io_trap  },		/* port 39 */
+	{ cons1_in, cons1_out  },	/* port 40 */
+	{ cond1_in, cond1_out  },	/* port 41 */
+	{ io_trap, io_trap  },		/* port 42 */
+	{ io_trap, io_trap  },		/* port 43 */
+	{ io_trap, io_trap  },		/* port 44 */
 };
 
 /*
  *	This function initializes the I/O handlers:
  *	1. Initialize all unused ports with the I/O trap handler.
- *	2. Initialize the MMU with NULL pointers.
+ *	2. Initialize the MMU with NULL pointers and defaults.
  *	3. Open the files which emulates the disk drives. The file
  *	   for drive A must be opened, or CP/M can't be booted.
  *	   Errors for opening one of the other 15 drives results
@@ -213,20 +250,28 @@ static BYTE (*port[256][2]) () = {
  *	   so that this drive can't be used.
  *	4. Create and open the file "printer.cpm" for emulation
  *	   of a printer.
- *	5. Fork the process for receiving from the serial port.
+ *	5. Fork the process for receiving from the auxiliary serial port.
  *	6. Open the named pipes "auxin" and "auxout" for simulation
- *	   of a serial port.
+ *	   of the auxiliary serial port.
+ *	7. Prepare TCP/IP sockets for serial port simulation
  */
 void init_io(void)
 {
 	register int i;
+	struct sockaddr_in sin;
+	static struct sigaction newact;
+	char *opt = "12345";
 
-	for (i = 28; i <= 255; i++) {
+	for (i = 45; i <= 255; i++) {
 		port[i][0] = io_trap;
 		port[i][1] = io_trap;
 	}
+
 	for (i = 0; i < MAXSEG; i++)
 		mmu[i] = NULL;
+	selbnk = 0;
+	segsize = SEGSIZ;
+
 	if ((*disks[0].fd = open(disks[0].fn, O_RDWR)) == -1) {
 		perror("file disks/drivea.cpm");
 		exit(1);
@@ -234,10 +279,12 @@ void init_io(void)
 	for (i = 1; i <= 15; i++)
 		if ((*disks[i].fd = open(disks[i].fn, O_RDWR)) == -1)
 			disks[i].fd = NULL;
+
 	if ((printer = creat("printer.cpm", 0644)) == -1) {
 		perror("file printer.cpm");
 		exit(1);
 	}
+
 	pid_rec = fork();
 	switch (pid_rec) {
 	case -1:
@@ -256,6 +303,35 @@ void init_io(void)
 		perror("pipe auxout");
 		exit(1);
 	}
+
+	newact.sa_handler = int_io;
+	sigaction(SIGIO, &newact, NULL);
+	if ((s1 = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+		perror("create socket s1");
+		exit(1);
+	}
+	if (setsockopt(s1, SOL_SOCKET, SO_REUSEADDR, opt, strlen(opt)) == -1) {
+		perror("socket options s1");
+		exit(1);
+	}
+	fcntl(s1, F_SETOWN, getpid());
+	i = fcntl(s1, F_GETFL, 0);
+	if (fcntl(s1, F_SETFL, i | FASYNC) == -1) {
+		perror("fcntl FASYNC s1");
+		exit(1);
+	}
+	bzero((char *)&sin, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = INADDR_ANY;
+	sin.sin_port = htons(4000);
+	if (bind(s1, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+		perror("bind socket s1");
+		exit(1);
+	}
+	if (listen(s1, 0) == -1) {
+		perror("listen on socket s1");
+		exit(1);
+	}
 }
 
 /*
@@ -264,7 +340,8 @@ void init_io(void)
  *	1. The files emulating the disk drives are closed.
  *	2. The file "printer.com" emulating a printer is closed.
  *	3. The named pipes "auxin" and "auxout" are closed.
- *	4. The receiving process for the serial port is stopped.
+ *	4. All sockets are closed
+ *	5. The receiving process for the serial port is stopped.
  */
 void exit_io(void)
 {
@@ -276,13 +353,16 @@ void exit_io(void)
 	close(printer);
 	close(auxin);
 	close(auxout);
+	close(s1);
+	if (s1a)
+		close(s1a);
 	kill(pid_rec, SIGHUP);
 }
 
 /*
  *	This function is called for every IN opcode from the
- *	CPU emulation. It calls the right handler for the
- *	port, from which input is wanted.
+ *	CPU emulation. It calls the handler for the port,
+ *	from which input is wanted.
  */
 BYTE io_in(BYTE adr)
 {
@@ -291,7 +371,7 @@ BYTE io_in(BYTE adr)
 
 /*
  *	This function is called for every OUT opcode from the
- *	CPU emulation. It calls the right handler for the port,
+ *	CPU emulation. It calls the handler for the port,
  *	to which output is wanted.
  */
 BYTE io_out(BYTE adr, BYTE data)
@@ -313,7 +393,7 @@ static BYTE io_trap(void)
 }
 
 /*
- *	I/O handler for read console status:
+ *	I/O handler for read console 0 status:
  *	0xff : input available
  *	0x00 : no input available
  */
@@ -339,7 +419,35 @@ static BYTE cons_in(void)
 }
 
 /*
- *	I/O handler for write console status:
+ *	I/O handler for read console 1 status:
+ *	bit 0 = 1: input available
+ *	bit 1 = 1: output writable
+ */
+static BYTE cons1_in(void)
+{
+	register BYTE status = 0;
+	struct pollfd p[1];
+
+	if (s1a != 0) {
+		p[0].fd = s1a;
+		p[0].events = POLLIN | POLLOUT;
+		p[0].revents = 0;
+		poll(p, 1, 0);
+		if (p[0].revents & POLLHUP) {
+			close(s1a);
+			s1a = 0;
+			return(0);
+		}
+		if (p[0].revents & POLLIN)
+			status |= 1;
+		if (p[0].revents & POLLOUT)
+			status |= 2;
+	}
+	return(status);
+}
+
+/*
+ *	I/O handler for write console 0 status:
  *	no reaction
  */
 static BYTE cons_out(BYTE data)
@@ -349,7 +457,17 @@ static BYTE cons_out(BYTE data)
 }
 
 /*
- *	I/O handler for read console data:
+ *	I/O handler for write console 1 status:
+ *	no reaction
+ */
+static BYTE cons1_out(BYTE data)
+{
+	data = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read console 0 data:
  *	read one character from the terminal without echo
  *	and character transformations
  */
@@ -374,14 +492,36 @@ static BYTE cond_in(void)
 }
 
 /*
- *	I/O handler for write console data:
+ *	I/O handler for read console 1 data:
+ */
+static BYTE cond1_in(void)
+{
+	char c;
+
+	read(s1a, &c, 1);
+	return((BYTE) c);
+}
+
+/*
+ *	I/O handler for write console 0 data:
  *	the output is written to the terminal
  */
 static BYTE cond_out(BYTE data)
 {
-	while ((write(fileno(stdout), (char *) &data, 1)) != 1)
+	while (write(fileno(stdout), (char *) &data, 1) != 1)
 		;
 	fflush(stdout);
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 1 data:
+ *	the output is written to the socket
+ */
+static BYTE cond1_out(BYTE data)
+{
+	while (write(s1a, (char *) &data, 1) != 1)
+		;
 	return((BYTE) 0);
 }
 
@@ -420,7 +560,7 @@ static BYTE prtd_in(void)
 static BYTE prtd_out(BYTE data)
 {
 	if (data != '\r')
-		while ((write(printer, (char *) &data, 1)) != 1)
+		while (write(printer, (char *) &data, 1) != 1)
 			;
 	return((BYTE) 0);
 }
@@ -678,7 +818,7 @@ static BYTE mmui_out(BYTE data)
 		exit(1);
 	}
 	for (i = 0; i < data; i++) {
-		if ((mmu[i] = malloc(SEGSIZ)) == NULL) {
+		if ((mmu[i] = malloc(segsize)) == NULL) {
 			printf("can't allocate memory for bank %d\n", i+1);
 			exit(1);
 		}
@@ -711,9 +851,34 @@ static BYTE mmus_out(BYTE data)
 	}
 	if (data == selbnk)
 		return((BYTE) 0);
-	memcpy(mmu[selbnk], (char *) ram, SEGSIZ);
-	memcpy((char *) ram, mmu[data], SEGSIZ);
+	//printf("SIM: memory select bank %d from %d\n", data, PC-ram);
+	memcpy(mmu[selbnk], (char *) ram, segsize);
+	memcpy((char *) ram, mmu[data], segsize);
 	selbnk = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read MMU segment size configuration:
+ *	returns size of the bank segments in pages a 256 bytes
+ */
+static BYTE mmuc_in(void)
+{
+	return((BYTE) (segsize >> 8));
+}
+
+/*
+ *	I/O handler for write MMU segment size configuration:
+ *	set the size of the bank segements in pages a 256 bytes
+ *	must be done before any banks are allocated
+ */
+static BYTE mmuc_out(BYTE data)
+{
+	if (mmu[0] != NULL) {
+		printf("Not possible to resize already allocated segments\n");
+		exit(1);
+	}
+	segsize = data << 8;
 	return((BYTE) 0);
 }
 
@@ -739,7 +904,7 @@ static BYTE clkc_out(BYTE data)
 /*
  *	I/O handler for read clock data:
  *	dependent from the last clock command the following
- *	informations are given from the system clock:
+ *	informations are returned from the system clock:
  *		0 - seconds in BCD
  *		1 - minutes in BCD
  *		2 - hours in BCD
@@ -825,6 +990,7 @@ static int get_date(struct tm *t)
 
 /*
  *	I/O handler for write timer
+ *	start or stop the 20ms interrupt timer
  */
 static BYTE time_out(BYTE data)
 {
@@ -853,6 +1019,8 @@ static BYTE time_out(BYTE data)
 
 /*
  *	I/O handler for read timer
+ *	return current status of 20ms interrupt timer,
+ *	1 = enabled, 0 = disabled
  */
 static BYTE time_in(void)
 {
@@ -865,4 +1033,23 @@ static BYTE time_in(void)
 static void int_timer(int sig)
 {
 	int_type = INT_INT;
+}
+
+/*
+ *	SIGIO interrupt handler
+ */
+static void int_io(int sig)
+{
+	struct sockaddr_in fsin;
+	int alen;
+
+	if (s1a == 0) {
+		alen = sizeof(fsin);
+		if ((s1a = accept(s1, (struct sockaddr *)&fsin, &alen)) == -1) {
+			perror("accept s1");
+			s1a = 0;
+		}
+	} else {
+		printf("\nUNHANDLED SIGIO!\n");
+	}
 }

@@ -40,9 +40,13 @@ int main(int argc, char *argv[])
 	signal(SIGHUP, int_handler);
 
 	for (;;) {
-		if (read(fdin, &c, 1) == 1)
+		if (read(fdin, &c, 1) == 1) {
 			if (c != '\r')
 				write(fdout, &c, 1);
+		} else {
+			close(fdout);
+			return(0);
+		}
 	}
 
 	return(0);
