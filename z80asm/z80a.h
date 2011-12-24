@@ -1,11 +1,12 @@
 /*
  *	Z80 - Assembler
- *	Copyright (C) 1987-2006 by Udo Munk
+ *	Copyright (C) 1987-2007 by Udo Munk
  *
  *	History:
  *	17-SEP-1987 Development under Digital Research CP/M 2.2
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
+ *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
  */
 
 /*
@@ -19,13 +20,13 @@
 /*
  *	various constants
  */
-#define REL		"1.3"
-#define COPYR		"Copyright (C) 1987-2006 by Udo Munk"
+#define REL		"1.4"
+#define COPYR		"Copyright (C) 1987-2007 by Udo Munk"
 #define SRCEXT		".asm"	/* filenamen extension source */
 #define OBJEXT		".bin"	/* filenamen extension object */
 #define LSTEXT		".lis"	/* filenamen extension listing */
 #define OUTBIN		1	/* format of object: binary */
-#define OUTMOS		2	/*		     Mostek binaer */
+#define OUTMOS		2	/*		     Mostek binary */
 #define OUTHEX		3	/*		     Intel hex */
 #define OUTDEF		OUTMOS	/* default object format */
 #define COMMENT		';'	/* inline comment character */

@@ -1,13 +1,24 @@
 /*
  * Z80SIM  -  a Z80-CPU simulator
  *
- * Copyright (C) 1987-2006 by Udo Munk
+ * Copyright (C) 1987-2007 by Udo Munk
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
- * 14-MAR-89 new option -l
- * 23-DEC-90 Ported to COHERENT 3.0
- * 06-OCT-06 modified to compile on modern POSIX OS's
+ * 11-JAN-89 Release 1.1
+ * 08-FEB-89 Release 1.2
+ * 13-MAR-89 Release 1.3
+ * 09-FEB-90 Release 1.4  Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5  Ported to COHERENT 3.0
+ * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
+ *			  and some optimization
+ * 25-JUN-92 Release 1.7  comments in english and ported to COHERENT 4.0
+ * 02-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 18-NOV-06 Release 1.9  modified to work with CP/M sources
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
+ * 25-DEC-06 Release 1.12 CPU speed option
+ * 19-FEB-07 Release 1.13 various improvements
  */
 
 #include <unistd.h>
@@ -68,6 +79,9 @@ void mon(void)
 		break;
 	case IOTRAP:
 		printf("\nI/O Trap at %04x\n", (unsigned int)(PC - ram));
+		break;
+	case IOERROR:
+		printf("\nFatal I/O Error at %04x\n", (unsigned int)(PC - ram));
 		break;
 	case OPTRAP1:
 		printf("\nOp-code trap at %04x %02x\n",

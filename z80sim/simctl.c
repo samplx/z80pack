@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2006 by Udo Munk
+ * Copyright (C) 1987-2007 by Udo Munk
  *
  * This modul contains the user interface, a full qualified ICE,
  * for the Z80-CPU simulation.
@@ -20,7 +20,8 @@
  * 18-NOV-06 Release 1.9  modified to work with CP/M sources
  * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
- * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
+ * 25-DEC-06 Release 1.12 CPU speed option
+ * 19-FEB-07 Release 1.13 various improvements
  */
 
 /*
@@ -31,6 +32,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <termios.h>
 #include <fcntl.h>
 #include <memory.h>
@@ -186,7 +188,7 @@ static void do_trace(char *s)
 {
 	register int count, i;
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	if (*s == '\0')
 		count =	20;
@@ -216,9 +218,9 @@ static void do_trace(char *s)
  */
 static void do_go(char *s)
 {
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
-	if (isxdigit(*s))
+	if (isxdigit((int)*s))
 		PC = ram + exatoi(s);
 	cont:
 	cpu_state = CONTIN_RUN;
@@ -268,6 +270,8 @@ static int handel_break(void)
 	printf("Software breakpoint %d reached at %04x\n", i, break_address);
 	soft[i].sb_passcount = 0;	/* reset passcounter */
 	return(0);			/* pass	reached, stop */
+#else
+	return(0);
 #endif
 }
 
@@ -279,9 +283,9 @@ static void do_dump(char *s)
 	register int i,	j;
 	BYTE c;
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
-	if (isxdigit(*s))
+	if (isxdigit((int)*s))
 		wrk_ram	= ram +	exatoi(s) - exatoi(s) %	16;
 	printf("Adr    ");
 	for (i = 0; i <	16; i++)
@@ -309,9 +313,9 @@ static void do_list(char *s)
 {
 	register int i;
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
-	if (isxdigit(*s))
+	if (isxdigit((int)*s))
 		wrk_ram	= ram +	exatoi(s);
 	for (i = 0; i <	10; i++) {
 		printf("%04x - ", (unsigned int)(wrk_ram - ram));
@@ -328,9 +332,9 @@ static void do_modify(char *s)
 {
 	static char nv[LENCMD];
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
-	if (isxdigit(*s))
+	if (isxdigit((int)*s))
 		wrk_ram	= ram +	exatoi(s);
 	for (;;) {
 		printf("%04x = %02x : ", (unsigned int)(wrk_ram - ram),
@@ -342,7 +346,7 @@ static void do_modify(char *s)
 				wrk_ram	= ram;
 			continue;
 		}
-		if (!isxdigit(nv[0]))
+		if (!isxdigit((int)nv[0]))
 			break;
 		*wrk_ram++ = exatoi(nv);
 		if (wrk_ram > ram + 65535)
@@ -359,7 +363,7 @@ static void do_fill(char *s)
 	register int i;
 	register BYTE val;
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	p = ram	+ exatoi(s);
 	while (*s != ',' && *s != '\0')
@@ -394,7 +398,7 @@ static void do_move(char *s)
 	register int count;
 
 	
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	p1 = ram + exatoi(s);
 	while (*s != ',' && *s != '\0')
@@ -431,12 +435,12 @@ static void do_port(char *s)
 	static char nv[LENCMD];
 	extern BYTE io_out(), io_in();
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	port = exatoi(s);
 	printf("%02x = %02x : ", port, io_in(port));
 	fgets(nv, sizeof(nv), stdin);
-	if (isxdigit(*nv))
+	if (isxdigit((int)*nv))
 		io_out(port, (BYTE) exatoi(nv));
 }
 
@@ -447,7 +451,7 @@ static void do_reg(char *s)
 {
 	static char nv[LENCMD];
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	if (*s == '\0')	{
 		print_head();
@@ -649,7 +653,7 @@ static void do_break(char *s)
 				soft[i].sb_adr,soft[i].sb_pass,soft[i].sb_passcount);
 		return;
 	}
-	if (isxdigit(*s)) {
+	if (isxdigit((int)*s)) {
 		i = atoi(s++);
 		if (i >= SBSIZE) {
 			printf("breakpoint %d not available\n",	i);
@@ -660,7 +664,7 @@ static void do_break(char *s)
 		if (sb_next == SBSIZE)
 			sb_next	= 0;
 	}
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	if (*s == 'c') {
 		*(ram +	soft[i].sb_adr)	= soft[i].sb_oldopc;
@@ -672,7 +676,7 @@ static void do_break(char *s)
 	soft[i].sb_adr = exatoi(s);
 	soft[i].sb_oldopc = *(ram + soft[i].sb_adr);
 	*(ram +	soft[i].sb_adr)	= 0x76;
-	while (!iscntrl(*s) && !ispunct(*s))
+	while (!iscntrl((int)*s) && !ispunct((int)*s))
 		s++;
 	if (*s != ',')
 		soft[i].sb_pass	= 1;
@@ -693,7 +697,7 @@ static void do_hist(char *s)
 #else
 	int i,	l, b, e, c, sa;
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	switch (*s) {
 	case 'c':
@@ -709,7 +713,7 @@ static void do_hist(char *s)
 		e = h_next;
 		b = (h_flag) ? h_next +	1 : 0;
 		l = 0;
-		while (isspace(*s))
+		while (isspace((int)*s))
 			s++;
 		if (*s)
 			sa = exatoi(s);
@@ -752,7 +756,7 @@ static void do_count(char *s)
 	puts("Sorry, no t-state count available");
 	puts("Please recompile with WANT_TIM defined in sim.h");
 #else
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	if (*s == '\0')	{
 		puts("start  stop  status  T-states");
@@ -884,7 +888,7 @@ static int do_getfile(char *s)
 	register char *pfn = fn;
 	int fd;
 
-	while (isspace(*s))
+	while (isspace((int)*s))
 		s++;
 	while (*s != ',' && *s != '\n' && *s !=	'\0')
 		*pfn++ = *s++;
@@ -999,6 +1003,9 @@ static void cpu_err_msg(void)
 		break;
 	case IOTRAP:
 		printf("I/O Trap at %04x\n", (unsigned int)(PC - ram));
+		break;
+	case IOERROR:
+		printf("Fatal I/O Error at %04x\n", (unsigned int)(PC - ram));
 		break;
 	case OPTRAP1:
 		printf("Op-code trap at %04x %02x\n",

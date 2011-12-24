@@ -47,7 +47,7 @@ int main(void)
 		exit(1);
 	}
 	if (header[0] != 0xff || header[1] != 0 || header[2] != 0) {
-		puts("start adress of boot.bin <> 0");
+		puts("start address of boot.bin <> 0");
 		exit(0);
 	}
 	/* read boot loader */

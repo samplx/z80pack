@@ -1,25 +1,27 @@
-CFLAGS= -O -s
+CC = gcc
+
+CFLAGS= -O -s -Wall
 
 all: format putsys bin2hex send receive bios.bin boot.bin
 	@echo "done"
 
 format: format.c
-	cc $(CFLAGS) -o format format.c
+	$(CC) $(CFLAGS) -o format format.c
 	cp format ..
 
 putsys: putsys.c
-	cc $(CFLAGS) -o putsys putsys.c
+	$(CC) $(CFLAGS) -o putsys putsys.c
 
 bin2hex: bin2hex.c
-	cc $(CFLAGS) -o bin2hex bin2hex.c
+	$(CC) $(CFLAGS) -o bin2hex bin2hex.c
 	cp bin2hex ..
 
 send: send.c
-	cc $(CFLAGS) -o send send.c
+	$(CC) $(CFLAGS) -o send send.c
 	cp send ..
 
 receive: receive.c
-	cc $(CFLAGS) -o receive receive.c
+	$(CC) $(CFLAGS) -o receive receive.c
 	cp receive ..
 
 bios.bin: bios.asm

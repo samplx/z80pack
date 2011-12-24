@@ -30,6 +30,7 @@ DMAL	EQU	15		;dma-port: dma address low
 DMAH	EQU	16		;dma-port: dma address high
 MMUINI	EQU	20		;initialize mmu
 MMUSEL	EQU	21		;bank select mmu
+MMUSEG	EQU	22		;configure segment size mmu
 TIMER	EQU	27		;interrupt timer
 ;
 POLL	EQU	131		;xdos poll function
@@ -358,6 +359,8 @@ MAXCONSOLE:
 ;
 SYSTEMINIT:
 ;
+	LD	A,0B0H		;configure mmu segment size
+	OUT	(MMUSEG),A
 	LD	A,8		;initialize banked memory
 	OUT	(MMUINI),A
 	LD	B,A
@@ -532,7 +535,7 @@ WAITIO: OUT	(FDCOP),A	;start i/o operation
 ;	XIOS data segment
 ;
 SIGNON:	DEFB	13,10
-	DEFM	'MP/M 2 XIOS V1.5 for Z80SIM, '
+	DEFM	'MP/M 2 XIOS V1.5-NET for Z80SIM, '
 	DEFM	'Copyright 1989-2007 by Udo Munk'
 	DEFB	13,10,0
 ;

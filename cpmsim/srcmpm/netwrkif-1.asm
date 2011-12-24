@@ -26,13 +26,13 @@ true	equ	not false
 debug	equ	false
 
 mail	equ	true	; allocate storage and setup mailbox
-WtchDg	equ	false	; include watch dog timer
+WtchDg	equ	true	; include watch dog timer
 
 mutexin	equ	false	; provide mutual exclusion on input
 mutexout equ	false	; provide mutual exclusion on output
 
 NmbFcbs	equ	16	; Number of fcbs for each slave
-NmbSlvs	equ	1	; Number of slaves
+NmbSlvs	equ	2	; Number of slaves
 
 Console1$status	equ	40
 Console2$status	equ	42
@@ -85,7 +85,7 @@ NtwrkIP0:
 	dw	UQCBNtwrkQI0	; HL
 	dw	UQCBNtwrkQO0	; DE
 	dw	BufferQ0	; BC
-	dw	0		; AF, A = ntwkif console dev #
+	dw	0200H		; AF, A = ntwkif console dev #
 	ds	2		; scratch
 
 NtwrkIS0:
@@ -173,7 +173,7 @@ NtwrkIP1:
 	dw	UQCBNtwrkQI1	; HL
 	dw	UQCBNtwrkQO1	; DE
 	dw	BufferQ1	; BC
-	dw	0100h		; AF, A = ntwkif console dev #
+	dw	0300h		; AF, A = ntwkif console dev #
 	ds	2		; scratch
 
 NtwrkIS1:

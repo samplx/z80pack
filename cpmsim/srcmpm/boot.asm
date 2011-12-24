@@ -33,7 +33,7 @@ LSECT:	LD	A,B		; set track
 	OUT	(SECTOR),A
 	LD	A,L		; set dma address low
 	OUT	(DMAL),A
-	LD	A,H		; set dma adress high
+	LD	A,H		; set dma address high
 	OUT	(DMAH),A
 	XOR	A		; read sector
 	OUT	(FDCOP),A

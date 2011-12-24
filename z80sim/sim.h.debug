@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2006 by Udo Munk
+ * Copyright (C) 1987-2007 by Udo Munk
  *
  * This is the configuration I'm using for software testing and debugging
  *
@@ -14,12 +14,13 @@
  * 20-DEC-90 Release 1.5  Ported to COHERENT 3.0
  * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
  *			  and some optimization
- * 25-JUN-92 Release 1.7  comments in english
- * 03-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 25-JUN-92 Release 1.7  comments in english and ported to COHERENT 4.0
+ * 02-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
  * 18-NOV-06 Release 1.9  modified to work with CP/M sources
  * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
  * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
- * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
+ * 25-DEC-06 Release 1.12 CPU speed option
+ * 19-FEB-07 Release 1.13 various improvements
  */
 
 /*
@@ -50,8 +51,8 @@
 /*
  *	The following lines of this file should not be modified by user
  */
-#define	COPYR	"Copyright (C) 1987-2006 by Udo Munk"
-#define	RELEASE	"1.12"
+#define	COPYR	"Copyright (C) 1987-2007 by Udo Munk"
+#define	RELEASE	"1.13"
 
 #define	LENCMD		80		/* length of command buffers etc */
 
@@ -73,12 +74,14 @@
 #define	NONE		0		/* no error */
 #define	OPHALT		1		/* HALT	op-code	trap */
 #define	IOTRAP		2		/* IN/OUT trap */
-#define	OPTRAP1		3		/* illegal 1 byte op-code trap */
-#define	OPTRAP2		4		/* illegal 2 byte op-code trap */
-#define	OPTRAP4		5		/* illegal 4 byte op-code trap */
-#define	USERINT		6		/* user	interrupt */
+#define IOERROR		3		/* fatal I/O error */
+#define	OPTRAP1		4		/* illegal 1 byte op-code trap */
+#define	OPTRAP2		5		/* illegal 2 byte op-code trap */
+#define	OPTRAP4		6		/* illegal 4 byte op-code trap */
+#define	USERINT		7		/* user	interrupt */
 
 					/* type of CPU interrupt */
+#define INT_NONE	0
 #define	INT_NMI		1		/* non maskable interrupt */
 #define	INT_INT		2		/* maskable interrupt */
 

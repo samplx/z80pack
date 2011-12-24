@@ -1,11 +1,12 @@
 /*
  *	Z80 - Assembler
- *	Copyright (C) 1987-2006 by Udo Munk
+ *	Copyright (C) 1987-2007 by Udo Munk
  *
  *	History:
  *	17-SEP-1987 Development under Digital Research CP/M 2.2
  *	28-JUN-1988 Switched to Unix System V.3
  *	22-OCT-2006 changed to ANSI C for modern POSIX OS's
+ *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
  */
 
 /*
@@ -18,8 +19,15 @@
 #include "z80aglb.h"
 
 char *get_second(char *);
+int lda(void), ldb(void), ldc(void), ldd(void), lde(void);
+int ldh(void), ldl(void);
+int ldbc(void), ldde(void), ldhl(void), ldix(void), ldiy(void);
+int ldsp(void), ldihl(void), ldiix(void), ldiiy(void), ldinn(void);
+int adda(void), addhl(void), addix(void), addiy(void);
+int adca(void), adchl(void), sbca(void), sbchl(void);
 
 extern int eval(char *);
+extern int calc_val(char *);
 extern int chk_v1(int);
 extern int chk_v2(int);
 extern void asmerr(int);

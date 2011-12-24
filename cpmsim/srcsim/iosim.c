@@ -1,11 +1,11 @@
 /*
  * Z80SIM  -  a Z80-CPU simulator
  *
- * Copyright (C) 1987-2006 by Udo Munk
+ * Copyright (C) 1987-2007 by Udo Munk
  *
  * This modul contains a complex I/O-simulation for running
  * CP/M 2, CP/M 3, MP/M...
- * Please note this this doesn't emulate any hardware which
+ * Please note this doesn't emulate any hardware which
  * ever existed, we've got all virtual circuits in here!
  *
  * History:
@@ -21,11 +21,12 @@
  * 10-DEC-06 started adding serial port for a passive TCP/IP socket
  * 14-DEC-06 started adding serial port for a client TCP/IP socket
  * 25-DEC-06 CPU speed option and 100 ticks interrupt
+ * 19-FEB-07 improved networking
  */
 
 /*
  *	This module contains the I/O handlers for a simulation
- *	of the hardware required for a CP/M system.
+ *	of the hardware required for a CP/M / MP/M system.
  *
  *	Used I/O ports:
  *
@@ -53,11 +54,17 @@
  *
  *	25 - clock command
  *	26 - clock data
- *	27 - 20ms timer causing IM 1 INT
+ *	27 - 10ms timer causing IM 1 INT
  *	28 - 10ms delay circuit
  *
  *	40 - passive socket #1 status
  *	41 - passive socket #1 data
+ *	42 - passive socket #2 status
+ *	43 - passive socket #2 data
+ *	44 - passive socket #3 status
+ *	45 - passive socket #3 data
+ *	46 - passive socket #4 status
+ *	47 - passive socket #4 data
  *
  *	50 - client socket #1 status
  *	51 - client socket #1 data
@@ -68,10 +75,12 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <strings.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <time.h>
 #include <netdb.h>
+#include <sys/file.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -94,42 +103,45 @@ struct dskdef {
 	unsigned int sectors;
 };
 
-static BYTE drive;	/* current drive A..P (0..15) */
-static BYTE track;	/* current track (0..255) */
-static BYTE sector;	/* current sektor (0..255) */
-static BYTE status;	/* status of last I/O operation on FDC */
-static BYTE dmadl;	/* current DMA adresse destination low */
-static BYTE dmadh;	/* current DMA adresse destination high */
-static BYTE clkcmd;	/* clock command */
-static BYTE timer;	/* 20ms timer */
-static int drivea;	/* fd for file "drivea.cpm" */
-static int driveb;	/* fd for file "driveb.cpm" */
-static int drivec;	/* fd for file "drivec.cpm" */
-static int drived;	/* fd for file "drived.cpm" */
-static int drivee;	/* fd for file "drivee.cpm" */
-static int drivef;	/* fd for file "drivef.cpm" */
-static int driveg;	/* fd for file "driveg.cpm" */
-static int driveh;	/* fd for file "driveh.cpm" */
-static int drivei;	/* fd for file "drivei.cpm" */
-static int drivej;	/* fd for file "drivej.cpm" */
-static int drivek;	/* fd for file "drivek.cpm" */
-static int drivel;	/* fd for file "drivel.cpm" */
-static int drivem;	/* fd for file "drivem.cpm" */
-static int driven;	/* fd for file "driven.cpm" */
-static int driveo;	/* fd for file "driveo.cpm" */
-static int drivep;	/* fd for file "drivep.cpm" */
-static int printer;	/* fd for file "printer.cpm" */
-static int auxin;	/* fd for pipe "auxin" */
-static int auxout;	/* fd for pipe "auxout" */
-static int aux_in_eof;	/* status of pipe "auxin" (<>0 means EOF) */
-static int pid_rec;	/* PID of the receiving process for auxiliary */
-static char last_char;	/* buffer for 1 character (console status) */
-static int s1;		/* server socket #1 descriptor */
-static int s1_port;	/* TCP/IP port for s1 */
-static int s1a;		/* connected server socket #1 descriptor */
-static int c1;		/* client socket #1 descriptor */
-static int c1_port;	/* TCP/IP port for c1 */
-static char c1_host[256]; /* hostname for c1 */
+static BYTE drive;		/* current drive A..P (0..15) */
+static BYTE track;		/* current track (0..255) */
+static BYTE sector;		/* current sektor (0..255) */
+static BYTE status;		/* status of last I/O operation on FDC */
+static BYTE dmadl;		/* current DMA address destination low */
+static BYTE dmadh;		/* current DMA address destination high */
+static BYTE clkcmd;		/* clock command */
+static BYTE timer;		/* 10ms timer */
+static int drivea;		/* fd for file "drivea.cpm" */
+static int driveb;		/* fd for file "driveb.cpm" */
+static int drivec;		/* fd for file "drivec.cpm" */
+static int drived;		/* fd for file "drived.cpm" */
+static int drivee;		/* fd for file "drivee.cpm" */
+static int drivef;		/* fd for file "drivef.cpm" */
+static int driveg;		/* fd for file "driveg.cpm" */
+static int driveh;		/* fd for file "driveh.cpm" */
+static int drivei;		/* fd for file "drivei.cpm" */
+static int drivej;		/* fd for file "drivej.cpm" */
+static int drivek;		/* fd for file "drivek.cpm" */
+static int drivel;		/* fd for file "drivel.cpm" */
+static int drivem;		/* fd for file "drivem.cpm" */
+static int driven;		/* fd for file "driven.cpm" */
+static int driveo;		/* fd for file "driveo.cpm" */
+static int drivep;		/* fd for file "drivep.cpm" */
+static int printer;		/* fd for file "printer.cpm" */
+static int auxin;		/* fd for pipe "auxin" */
+static int auxout;		/* fd for pipe "auxout" */
+static int aux_in_eof;		/* status of pipe "auxin" (<>0 means EOF) */
+static int pid_rec;		/* PID of the receiving process for auxiliary */
+static char last_char;		/* buffer for 1 character (console status) */
+
+#ifdef NETWORKING
+static int ss[NUMSOC];		/* server socket descriptors */
+static int ss_port[NUMSOC];	/* TCP/IP port for server sockets */
+static int ss_telnet[NUMSOC];	/* telnet protocol flag for server sockets */
+static int ssc[NUMSOC];		/* connected server socket descriptors */
+static int cs;			/* client socket #1 descriptor */
+static int cs_port;		/* TCP/IP port for cs */
+static char cs_host[256];	/* hostname for cs */
 
 #ifdef CNETDEBUG
 static int cdirection = -1; /* protocol direction, 0 = send, 1 = receive */
@@ -137,6 +149,8 @@ static int cdirection = -1; /* protocol direction, 0 = send, 1 = receive */
 
 #ifdef SNETDEBUG
 static int sdirection = -1; /* protocol direction, 0 = send 1 = receive */
+#endif
+
 #endif
 
 static struct dskdef disks[16] = {
@@ -203,11 +217,19 @@ static BYTE clkc_in(void), clkc_out(BYTE), clkd_in(void), clkd_out(BYTE);
 static BYTE time_in(void), time_out(BYTE);
 static BYTE delay_in(void), delay_out(BYTE);
 static BYTE cond1_in(void), cond1_out(BYTE), cons1_in(void), cons1_out(BYTE);
+static BYTE cond2_in(void), cond2_out(BYTE), cons2_in(void), cons2_out(BYTE);
+static BYTE cond3_in(void), cond3_out(BYTE), cons3_in(void), cons3_out(BYTE);
+static BYTE cond4_in(void), cond4_out(BYTE), cons4_in(void), cons4_out(BYTE);
 static BYTE netd1_in(void), netd1_out(BYTE), nets1_in(void), nets1_out(BYTE);
-static void int_timer(int), int_io(int);
+static void int_timer(int);
 
 static int to_bcd(int), get_date(struct tm *);
+
+#ifdef NETWORKING
 static void net_server_config(void), net_client_config(void);
+static void init_server_socket(int);
+static void int_io(int);
+#endif
 
 /*
  *	This array contains two function pointers for every
@@ -256,12 +278,12 @@ static BYTE (*port[256][2]) () = {
 	{ io_trap, io_trap  },		/* port 39 */
 	{ cons1_in, cons1_out  },	/* port 40 */
 	{ cond1_in, cond1_out  },	/* port 41 */
-	{ io_trap, io_trap  },		/* port 42 */
-	{ io_trap, io_trap  },		/* port 43 */
-	{ io_trap, io_trap  },		/* port 44 */
-	{ io_trap, io_trap  },		/* port 45 */
-	{ io_trap, io_trap  },		/* port 46 */
-	{ io_trap, io_trap  },		/* port 47 */
+	{ cons2_in, cons2_out  },	/* port 42 */
+	{ cond2_in, cond2_out  },	/* port 43 */
+	{ cons3_in, cons3_out  },	/* port 44 */
+	{ cond3_in, cond3_out  },	/* port 45 */
+	{ cons4_in, cons4_out  },	/* port 46 */
+	{ cond4_in, cond4_out  },	/* port 47 */
 	{ io_trap, io_trap  },		/* port 48 */
 	{ io_trap, io_trap  },		/* port 49 */
 	{ nets1_in, nets1_out  },	/* port 50 */
@@ -290,9 +312,9 @@ static BYTE (*port[256][2]) () = {
 void init_io(void)
 {
 	register int i;
-	struct sockaddr_in sin;
+#ifdef NETWORKING
 	static struct sigaction newact;
-	char *opt = "12345";
+#endif
 
 	for (i = 55; i <= 255; i++) {
 		port[i][0] = io_trap;
@@ -336,81 +358,109 @@ void init_io(void)
 		exit(1);
 	}
 
+#ifdef NETWORKING
 	net_server_config();
 	net_client_config();
 
 	newact.sa_handler = int_io;
 	sigaction(SIGIO, &newact, NULL);
 
-	if (s1_port) {
-		if ((s1 = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-			perror("create socket s1");
-			exit(1);
-		}
-		if (setsockopt(s1, SOL_SOCKET, SO_REUSEADDR, opt,
-		    strlen(opt)) == -1) {
-			perror("socket options s1");
-			exit(1);
-		}
-		fcntl(s1, F_SETOWN, getpid());
-		i = fcntl(s1, F_GETFL, 0);
-		if (fcntl(s1, F_SETFL, i | FASYNC) == -1) {
-			perror("fcntl FASYNC s1");
-			exit(1);
-		}
-		bzero((char *)&sin, sizeof(sin));
-		sin.sin_family = AF_INET;
-		sin.sin_addr.s_addr = INADDR_ANY;
-		sin.sin_port = htons(s1_port);
-		if (bind(s1, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
-			perror("bind socket s1");
-			exit(1);
-		}
-		if (listen(s1, 0) == -1) {
-			perror("listen on socket s1");
-			exit(1);
-		}
+	for (i = 0; i < NUMSOC; i++)
+		init_server_socket(i);
+#endif
+}
+
+#ifdef NETWORKING
+/*
+ * initialize a server socket
+ */
+static void init_server_socket(int n)
+{
+	struct sockaddr_in sin;
+	int on = 1;
+	int i;
+
+	if (ss_port[n] == 0)
+		return;
+	if ((ss[n] = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+		perror("create server socket");
+		exit(1);
+	}
+	if (setsockopt(ss[n], SOL_SOCKET, SO_REUSEADDR, (void *)&on,
+	    sizeof(on)) == -1) {
+		perror("server socket options");
+		exit(1);
+	}
+	fcntl(ss[n], F_SETOWN, getpid());
+	i = fcntl(ss[n], F_GETFL, 0);
+	if (fcntl(ss[n], F_SETFL, i | FASYNC) == -1) {
+		perror("fcntl FASYNC server socket");
+		exit(1);
+	}
+	bzero((char *)&sin, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = INADDR_ANY;
+	sin.sin_port = htons(ss_port[n]);
+	if (bind(ss[n], (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+		perror("bind server socket");
+		exit(1);
+	}
+	if (listen(ss[n], 0) == -1) {
+		perror("listen on server socket");
+		exit(1);
 	}
 }
 
 /*
  * Read and process network server configuration file
  */
-void net_server_config(void)
+static void net_server_config(void)
 {
+	register int i;
 	FILE *fp;
 	char buf[256];
 	char *s;
 
-	if ((fp = fopen("net_server.conf", "r")) == NULL) {
-		s1_port = 0;
-	} else {
+	if ((fp = fopen("net_server.conf", "r")) != NULL) {
+		printf("Server network configuration:\n");
 		s = &buf[0];
 		while (fgets(s, 256, fp) != NULL) {
 			if (*s == '#')
 				continue;
+			i = atoi(s);
+			if ((i < 1) || (i > 4)) {
+				printf("console %d not supported\n", i);
+				continue;
+			}
 			while((*s != ' ') && (*s != '\t'))
 				s++;
 			while((*s == ' ') || (*s == '\t'))
 				s++;
-			s1_port = atoi(s);
+			ss_telnet[i - 1] = atoi(s);
+			while((*s != ' ') && (*s != '\t'))
+				s++;
+			while((*s == ' ') || (*s == '\t'))
+				s++;
+			ss_port[i - 1] = atoi(s);
+			printf("console %d listening on port %d, telnet = %s\n",			       i, ss_port[i - 1],
+			       ((ss_telnet[i - 1] > 0) ? "on" : "off"));
 		}
 		fclose(fp);
+		printf("\n");
 	}
 }
 
 /*
  * Read and process network client configuration file
  */
-void net_client_config(void)
+static void net_client_config(void)
 {
 	FILE *fp;
 	char buf[256];
 	char *s, *d;
 
-	if ((fp = fopen("net_client.conf", "r")) == NULL) {
-		c1_port = 0;
-	} else {
+	if ((fp = fopen("net_client.conf", "r")) != NULL) {
+		printf("Client network configuration:\n");
 		s = &buf[0];
 		while (fgets(s, 256, fp) != NULL) {
 			if (*s == '#')
@@ -419,17 +469,21 @@ void net_client_config(void)
 				s++;
 			while((*s == ' ') || (*s == '\t'))
 				s++;
-			d = &c1_host[0];
+			d = &cs_host[0];
 			while ((*s != ' ') && (*s != '\t'))
 				*d++ = *s++;
 			*d = '\0';
 			while((*s == ' ') || (*s == '\t'))
 				s++;
-			c1_port = atoi(s);
+			cs_port = atoi(s);
+			printf("Connecting to %s at port %d\n", cs_host,
+			       cs_port);
 		}
 		fclose(fp);
+		printf("\n");
 	}
 }
+#endif
 
 /*
  *	This function stops the I/O handlers:
@@ -438,7 +492,7 @@ void net_client_config(void)
  *	2. The file "printer.com" emulating a printer is closed.
  *	3. The named pipes "auxin" and "auxout" are closed.
  *	4. All sockets are closed
- *	5. The receiving process for the serial port is stopped.
+ *	5. The receiving process for the aux serial port is stopped.
  */
 void exit_io(void)
 {
@@ -450,11 +504,16 @@ void exit_io(void)
 	close(printer);
 	close(auxin);
 	close(auxout);
-	close(s1);
-	if (s1a)
-		close(s1a);
-	if (c1)
-		close(c1);
+#ifdef NETWORKING
+	for (i = 0; i < NUMSOC; i++)
+		if (ss[i])
+			close(ss[i]);
+	for (i = 0; i < NUMSOC; i++)
+		if (ssc[i])
+			close(ssc[i]);
+	if (cs)
+		close(cs);
+#endif
 	kill(pid_rec, SIGHUP);
 }
 
@@ -525,16 +584,17 @@ static BYTE cons_in(void)
 static BYTE cons1_in(void)
 {
 	register BYTE status = 0;
+#ifdef NETWORKING
 	struct pollfd p[1];
 
-	if (s1a != 0) {
-		p[0].fd = s1a;
+	if (ssc[0] != 0) {
+		p[0].fd = ssc[0];
 		p[0].events = POLLIN | POLLOUT;
 		p[0].revents = 0;
 		poll(p, 1, 0);
 		if (p[0].revents & POLLHUP) {
-			close(s1a);
-			s1a = 0;
+			close(ssc[0]);
+			ssc[0] = 0;
 			return(0);
 		}
 		if (p[0].revents & POLLIN)
@@ -542,6 +602,97 @@ static BYTE cons1_in(void)
 		if (p[0].revents & POLLOUT)
 			status |= 2;
 	}
+#endif
+	return(status);
+}
+
+/*
+ *	I/O handler for read console 2 status:
+ *	bit 0 = 1: input available
+ *	bit 1 = 1: output writable
+ */
+static BYTE cons2_in(void)
+{
+	register BYTE status = 0;
+#ifdef NETWORKING
+	struct pollfd p[1];
+
+	if (ssc[1] != 0) {
+		p[0].fd = ssc[1];
+		p[0].events = POLLIN | POLLOUT;
+		p[0].revents = 0;
+		poll(p, 1, 0);
+		if (p[0].revents & POLLHUP) {
+			close(ssc[1]);
+			ssc[1] = 0;
+			return(0);
+		}
+		if (p[0].revents & POLLIN)
+			status |= 1;
+		if (p[0].revents & POLLOUT)
+			status |= 2;
+	}
+#endif
+	return(status);
+}
+
+/*
+ *	I/O handler for read console 3 status:
+ *	bit 0 = 1: input available
+ *	bit 1 = 1: output writable
+ */
+static BYTE cons3_in(void)
+{
+	register BYTE status = 0;
+#ifdef NETWORKING
+	struct pollfd p[1];
+
+	if (ssc[2] != 0) {
+		p[0].fd = ssc[2];
+		p[0].events = POLLIN | POLLOUT;
+		p[0].revents = 0;
+		poll(p, 1, 0);
+		if (p[0].revents & POLLHUP) {
+			close(ssc[2]);
+			ssc[2] = 0;
+			return(0);
+		}
+		if (p[0].revents & POLLIN)
+			status |= 1;
+		if (p[0].revents & POLLOUT)
+			status |= 2;
+	}
+#endif
+	return(status);
+}
+
+/*
+ *	I/O handler for read console 4 status:
+ *	bit 0 = 1: input available
+ *	bit 1 = 1: output writable
+ */
+static BYTE cons4_in(void)
+{
+	register BYTE status = 0;
+#ifdef NETWORKING
+	struct pollfd p[1];
+
+	if (ssc[3] != 0) {
+		p[0].fd = ssc[3];
+		p[0].events = POLLIN | POLLOUT;
+		p[0].revents = 0;
+		poll(p, 1, 0);
+		if (p[0].revents & POLLHUP) {
+			close(ssc[3]);
+			ssc[3] = 0;
+			return(0);
+		}
+		if (p[0].revents & POLLIN)
+			status |= 1;
+		if (p[0].revents & POLLOUT)
+			status |= 2;
+	}
+#endif
 	return(status);
 }
 
@@ -553,34 +704,39 @@ static BYTE cons1_in(void)
 static BYTE nets1_in(void)
 {
 	register BYTE status = 0;
+#ifdef NETWORKING
 	struct sockaddr_in sin;
 	struct hostent *host;
 	struct pollfd p[1];
 
-	if ((c1 == 0) && (c1_port != 0)) {
-		host = gethostbyname(&c1_host[0]);
-		if ((c1 = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-			perror("create socket c1");
-			exit(1);
+	if ((cs == 0) && (cs_port != 0)) {
+		host = gethostbyname(&cs_host[0]);
+		if ((cs = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+			perror("create client socket");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
 		}
 		bzero((char *)&sin, sizeof(sin));
 		bcopy(host->h_addr, (char *)&sin.sin_addr, host->h_length);
 		sin.sin_family = AF_INET;
-		sin.sin_port = htons(c1_port);
-		if (connect(c1, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
-			perror("connect socket c1");
-			exit(1);
+		sin.sin_port = htons(cs_port);
+		if (connect(cs, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+			perror("connect client socket");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
 		}
 	}
 
-	if (c1 != 0) {
-		p[0].fd = c1;
+	if (cs != 0) {
+		p[0].fd = cs;
 		p[0].events = POLLIN | POLLOUT;
 		p[0].revents = 0;
 		poll(p, 1, 0);
 		if (p[0].revents & POLLHUP) {
-			close(c1);
-			c1 = 0;
+			close(cs);
+			cs = 0;
 			return(0);
 		}
 		if (p[0].revents & POLLIN)
@@ -588,6 +744,7 @@ static BYTE nets1_in(void)
 		if (p[0].revents & POLLOUT)
 			status |= 2;
 	}
+#endif
 	return(status);
 }
 
@@ -606,6 +763,36 @@ static BYTE cons_out(BYTE data)
  *	no reaction
  */
 static BYTE cons1_out(BYTE data)
+{
+	data = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 2 status:
+ *	no reaction
+ */
+static BYTE cons2_out(BYTE data)
+{
+	data = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 3 status:
+ *	no reaction
+ */
+static BYTE cons3_out(BYTE data)
+{
+	data = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 4 status:
+ *	no reaction
+ */
+static BYTE cons4_out(BYTE data)
 {
 	data = data;
 	return((BYTE) 0);
@@ -652,22 +839,152 @@ static BYTE cond_in(void)
 static BYTE cond1_in(void)
 {
 	char c;
+#ifdef NETWORKING
+	char x;
 
-	if (read(s1a, &c, 1) != 1) {
-		if (errno == EAGAIN) {
-			close(s1a);
-			s1a = 0;
+	if (read(ssc[0], &c, 1) != 1) {
+		if ((errno == EAGAIN) || (errno == EINTR)) {
+			close(ssc[0]);
+			ssc[0] = 0;
 		} else {
-			perror("read s1a");
-			exit(1);
+			perror("read console 1");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
 		}
+	}
+	if (ss_telnet[0] && (c == '\r'))
+		read(ssc[0], &x, 1);
+	if (ss_telnet[0] && ((BYTE) c == 0xff)) {
+		read(ssc[0], &x, 1);
+		read(ssc[0], &x, 1);
 	}
 #ifdef SNETDEBUG
 	if (sdirection != 1) {
 		printf("\n<- ");
 		sdirection = 1;
 	}
-	printf("%02x ", c);
+	printf("%02x ", (BYTE) c);
+#endif
+#else
+	c = 0;
+#endif
+	return((BYTE) c);
+}
+
+/*
+ *	I/O handler for read console 2 data:
+ */
+static BYTE cond2_in(void)
+{
+	char c;
+#ifdef NETWORKING
+	char x;
+
+	if (read(ssc[1], &c, 1) != 1) {
+		if ((errno == EAGAIN) || (errno == EINTR)) {
+			close(ssc[1]);
+			ssc[1] = 0;
+		} else {
+			perror("read console 2");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
+		}
+	}
+	if (ss_telnet[1] && (c == '\r'))
+		read(ssc[1], &x, 1);
+	if (ss_telnet[1] && ((BYTE) c == 0xff)) {
+		read(ssc[1], &x, 1);
+		read(ssc[1], &x, 1);
+	}
+#ifdef SNETDEBUG
+	if (sdirection != 1) {
+		printf("\n<- ");
+		sdirection = 1;
+	}
+	printf("%02x ", (BYTE) c);
+#endif
+#else
+	c = 0;
+#endif
+	return((BYTE) c);
+}
+
+/*
+ *	I/O handler for read console 3 data:
+ */
+static BYTE cond3_in(void)
+{
+	char c;
+#ifdef NETWORKING
+	char x;
+
+	if (read(ssc[2], &c, 1) != 1) {
+		if ((errno == EAGAIN) || (errno == EINTR)) {
+			close(ssc[2]);
+			ssc[2] = 0;
+		} else {
+			perror("read console 3");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
+		}
+	}
+	if (ss_telnet[2] && (c == '\r'))
+		read(ssc[2], &x, 1);
+	if (ss_telnet[2] && ((BYTE) c == 0xff)) {
+		read(ssc[2], &x, 1);
+		read(ssc[2], &x, 1);
+	}
+#ifdef SNETDEBUG
+	if (sdirection != 1) {
+		printf("\n<- ");
+		sdirection = 1;
+	}
+	printf("%02x ", (BYTE) c);
+#endif
+#else
+	c = 0;
+#endif
+	return((BYTE) c);
+}
+
+/*
+ *	I/O handler for read console 4 data:
+ */
+static BYTE cond4_in(void)
+{
+	char c;
+#ifdef NETWORKING
+	char x;
+
+	if (read(ssc[3], &c, 1) != 1) {
+		if ((errno == EAGAIN) || (errno == EINTR)) {
+			close(ssc[3]);
+			ssc[3] = 0;
+		} else {
+			perror("read console 4");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
+		}
+	}
+	if (ss_telnet[3] && (c == '\r'))
+		read(ssc[3], &x, 1);
+	if (ss_telnet[3] && ((BYTE) c == 0xff)) {
+		read(ssc[3], &x, 1);
+		read(ssc[3], &x, 1);
+	}
+#ifdef SNETDEBUG
+	if (sdirection != 1) {
+		printf("\n<- ");
+		sdirection = 1;
+	}
+	printf("%02x ", (BYTE) c);
+#endif
+#else
+	c = 0;
 #endif
 	return((BYTE) c);
 }
@@ -679,16 +996,22 @@ static BYTE netd1_in(void)
 {
 	char c;
 
-	if (read(c1, &c, 1) != 1) {
-		perror("read c1");
-		exit(1);
+#ifdef NETWORKING
+	if (read(cs, &c, 1) != 1) {
+		perror("read client socket");
+		cpu_error = IOERROR;
+		cpu_state = STOPPED;
+		return((BYTE) 0);
 	}
 #ifdef CNETDEBUG
 	if (cdirection != 1) {
 		printf("\n<- ");
 		cdirection = 1;
 	}
-	printf("%02x ", c);
+	printf("%02x ", (BYTE) c);
+#endif
+#else
+	c = 0;
 #endif
 	return((BYTE) c);
 }
@@ -704,8 +1027,9 @@ again:
 		if (errno == EINTR) {
 			goto again;
 		} else {
-			perror("write console");
-			exit(1);
+			perror("write console 0");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
 		}
 	}
 	fflush(stdout);
@@ -718,22 +1042,109 @@ again:
  */
 static BYTE cond1_out(BYTE data)
 {
+#ifdef NETWORKING
 #ifdef SNETDEBUG
 	if (sdirection != 0) {
 		printf("\n-> ");
 		sdirection = 0;
 	}
-	printf("%02x ", data);
+	printf("%02x ", (BYTE) data);
 #endif
 again:
-	if (write(s1a, (char *) &data, 1) != 1) {
+	if (write(ssc[0], (char *) &data, 1) != 1) {
 		if (errno == EINTR) {
 			goto again;
 		} else {
-			perror("write s1a");
-			exit(1);
+			perror("write console 1");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
 		}
 	}
+#endif
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 2 data:
+ *	the output is written to the socket
+ */
+static BYTE cond2_out(BYTE data)
+{
+#ifdef NETWORKING
+#ifdef SNETDEBUG
+	if (sdirection != 0) {
+		printf("\n-> ");
+		sdirection = 0;
+	}
+	printf("%02x ", (BYTE) data);
+#endif
+again:
+	if (write(ssc[1], (char *) &data, 1) != 1) {
+		if (errno == EINTR) {
+			goto again;
+		} else {
+			perror("write console 2");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+		}
+	}
+#endif
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 3 data:
+ *	the output is written to the socket
+ */
+static BYTE cond3_out(BYTE data)
+{
+#ifdef NETWORKING
+#ifdef SNETDEBUG
+	if (sdirection != 0) {
+		printf("\n-> ");
+		sdirection = 0;
+	}
+	printf("%02x ", (BYTE) data);
+#endif
+again:
+	if (write(ssc[2], (char *) &data, 1) != 1) {
+		if (errno == EINTR) {
+			goto again;
+		} else {
+			perror("write console 3");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+		}
+	}
+#endif
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write console 4 data:
+ *	the output is written to the socket
+ */
+static BYTE cond4_out(BYTE data)
+{
+#ifdef NETWORKING
+#ifdef SNETDEBUG
+	if (sdirection != 0) {
+		printf("\n-> ");
+		sdirection = 0;
+	}
+	printf("%02x ", (BYTE) data);
+#endif
+again:
+	if (write(ssc[3], (char *) &data, 1) != 1) {
+		if (errno == EINTR) {
+			goto again;
+		} else {
+			perror("write console 4");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+		}
+	}
+#endif
 	return((BYTE) 0);
 }
 
@@ -743,22 +1154,25 @@ again:
  */
 static BYTE netd1_out(BYTE data)
 {
+#ifdef NETWORKING
 #ifdef CNETDEBUG
 	if (cdirection != 0) {
 		printf("\n-> ");
 		cdirection = 0;
 	}
-	printf("%02x ", data);
+	printf("%02x ", (BYTE) data);
 #endif
 again:
-	if (write(c1, (char *) &data, 1) != 1) {
+	if (write(cs, (char *) &data, 1) != 1) {
 		if (errno == EINTR) {
 			goto again;
 		} else {
-			perror("write c1");
-			exit(1);
+			perror("write client socket");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
 		}
 	}
+#endif
 	return((BYTE) 0);
 }
 
@@ -803,7 +1217,8 @@ again:
 				goto again;
 			} else {
 				perror("write printer");
-				exit(1);
+				cpu_error = IOERROR;
+				cpu_state = STOPPED;
 			}
 		}
 	}
@@ -1235,7 +1650,7 @@ static int get_date(struct tm *t)
 
 /*
  *	I/O handler for write timer
- *	start or stop the 20ms interrupt timer
+ *	start or stop the 10ms interrupt timer
  */
 static BYTE time_out(BYTE data)
 {
@@ -1264,7 +1679,7 @@ static BYTE time_out(BYTE data)
 
 /*
  *	I/O handler for read timer
- *	return current status of 20ms interrupt timer,
+ *	return current status of 10ms interrupt timer,
  *	1 = enabled, 0 = disabled
  */
 static BYTE time_in(void)
@@ -1308,24 +1723,53 @@ static void int_timer(int sig)
 	int_type = INT_INT;
 }
 
+#ifdef NETWORKING
 /*
  *	SIGIO interrupt handler
  */
 static void int_io(int sig)
 {
+	register int i;
 	struct sockaddr_in fsin;
+	struct pollfd p[NUMSOC];
 	int alen;
 	int go_away;
+	char char_mode[3] = {255, 251, 3};
+	char will_echo[3] = {255, 251, 1};
 
-	if (s1a != 0) {
-		go_away = accept(s1, (struct sockaddr *)&fsin, &alen);
-		close(go_away);
-		return;
+	for (i = 0; i < NUMSOC; i++) {
+		p[i].fd = ss[i];
+		p[i].events = POLLIN | POLLOUT;
+		p[i].revents = 0;
 	}
 
-	alen = sizeof(fsin);
-	if ((s1a = accept(s1, (struct sockaddr *)&fsin, &alen)) == -1) {
-		perror("accept s1");
-		s1a = 0;
+	poll(p, NUMSOC, 0);
+
+	for (i = 0; i < NUMSOC; i++) {
+		if ((ss[i] != 0) && (p[i].revents)) {
+
+			alen = sizeof(fsin);
+
+			if (ssc[i] != 0) {
+				go_away = accept(ss[i],
+						 (struct sockaddr *)&fsin,
+						 &alen);
+				close(go_away);
+				return;
+			}
+
+			if ((ssc[i] = accept(ss[i], (struct sockaddr *)&fsin,
+			    &alen)) == -1) {
+				perror("accept server socket");
+				ssc[i] = 0;
+			}
+
+			if (ss_telnet[i]) {
+				write(ssc[i], &char_mode, 3);
+				write(ssc[i], &will_echo, 3);
+			}
+
+		}
 	}
 }
+#endif

@@ -1,5 +1,11 @@
-CFLAGS= -O -c -Wall
-LFLAGS= -s
+CC = gcc
+
+CFLAGS = -O -c -Wall
+
+# Linux, BSD
+LFLAGS = -s
+# Solaris 9
+#LFLAGS = -s -lsocket -lnsl -lrt
 
 OBJ =   sim0.o \
 	sim1.o \
@@ -25,49 +31,49 @@ all: ../auxin ../auxout ../cpmsim
 	test -f ../auxout || mknod ../auxout p
 
 ../cpmsim : $(OBJ)
-	cc $(OBJ) $(LFLAGS) -o ../cpmsim
+	$(CC) $(OBJ) $(LFLAGS) -o ../cpmsim
 
 sim0.c:
 	lnsrc
 
 sim0.o : sim0.c sim.h simglb.h
-	cc $(CFLAGS) sim0.c
+	$(CC) $(CFLAGS) sim0.c
 
 sim1.o : sim1.c sim.h simglb.h
-	cc $(CFLAGS) sim1.c
+	$(CC) $(CFLAGS) sim1.c
 
 sim2.o : sim2.c sim.h simglb.h
-	cc $(CFLAGS) sim2.c
+	$(CC) $(CFLAGS) sim2.c
 
 sim3.o : sim3.c sim.h simglb.h
-	cc $(CFLAGS) sim3.c
+	$(CC) $(CFLAGS) sim3.c
 
 sim4.o : sim4.c sim.h simglb.h
-	cc $(CFLAGS) sim4.c
+	$(CC) $(CFLAGS) sim4.c
 
 sim5.o : sim5.c sim.h simglb.h
-	cc $(CFLAGS) sim5.c
+	$(CC) $(CFLAGS) sim5.c
 
 sim6.o : sim6.c sim.h simglb.h
-	cc $(CFLAGS) sim6.c
+	$(CC) $(CFLAGS) sim6.c
 
 sim7.o : sim7.c sim.h simglb.h
-	cc $(CFLAGS) sim7.c
+	$(CC) $(CFLAGS) sim7.c
 
 simctl.o : simctl.c sim.h simglb.h
-	cc $(CFLAGS) simctl.c
+	$(CC) $(CFLAGS) simctl.c
 
 simint.o : simint.c sim.h simglb.h
-	cc $(CFLAGS) simint.c
+	$(CC) $(CFLAGS) simint.c
 
 iosim.o : iosim.c sim.h simglb.h
-	cc $(CFLAGS) iosim.c
+	$(CC) $(CFLAGS) iosim.c
 
 simfun.o : simfun.c sim.h
-	cc $(CFLAGS) simfun.c
+	$(CC) $(CFLAGS) simfun.c
 
 simglb.o : simglb.c sim.h
-	cc $(CFLAGS) simglb.c
+	$(CC) $(CFLAGS) simglb.c
 
 clean:
 	rm -f *.o

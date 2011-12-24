@@ -1,11 +1,12 @@
 /*
  *	Z80 - Assembler
- *	Copyright (C) 1987-2006 by Udo Munk
+ *	Copyright (C) 1987-2007 by Udo Munk
  *
  *	History:
  *	17-SEP-1987 Development under Digital Research CP/M 2.2
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
+ *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
  */
 
 /*
@@ -13,8 +14,10 @@
  */
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "z80a.h"
 #include "z80aglb.h"
 
@@ -22,6 +25,7 @@ void init(void), options(int, char *[]);
 void usage(void), fatal(int, char *);
 void pass1(void), p1_file(char *);
 void pass2(void), p2_file(char *);
+int p1_line(void), p2_line(void);
 void open_o_files(char *), get_fn(char *, char *, char *);
 char *get_label(char *, char *);
 char *get_opcode(char *, char *);
@@ -49,7 +53,7 @@ static char *errmsg[] = {		/* error messages for fatal() */
 	"internal error: %s"		/* 4 */
 };
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int len;
 

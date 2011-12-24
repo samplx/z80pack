@@ -1,17 +1,19 @@
 /*
  *	Z80 - Assembler
- *	Copyright (C) 1987-2006 by Udo Munk
+ *	Copyright (C) 1987-2007 by Udo Munk
  *
  *	History:
  *	17-SEP-1987 Development under Digital Research CP/M 2.2
  *	28-JUN-1988 Switched to Unix System V.3
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
+ *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
  */
 
 /*
  *	modul with numercial computation and conversion
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -41,6 +43,13 @@
 #define OPEXOR		14	/* logical XOR */
 #define OPECOM		15	/* logical complement */
 #define OPESYM		99	/* symbol */
+
+int strval(char *);
+int isari(int);
+int get_type(char *);
+int axtoi(char *);
+int abtoi(char *);
+int aotoi(char *);
 
 extern struct sym *get_sym(char *);
 extern void asmerr(int);

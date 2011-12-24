@@ -1,11 +1,12 @@
 /*
  *	Z80 - Assembler
- *	Copyright (C) 1987-2006 by Udo Munk
+ *	Copyright (C) 1987-2007 by Udo Munk
  *
  *	History:
  *	17-SEP-1987 Development under Digital Research CP/M 2.2
  *	28-JUN-1988 Switched to Unix System V.3
  *	22-OCT-2006 changed to ANSI C for modern POSIX OS's
+ *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
  */
 
 /*
