@@ -27,7 +27,8 @@ OBJ =   sim0.o \
 	simint.o \
 	iosim.o \
 	simfun.o \
-	simglb.o
+	simglb.o \
+	unix_terminal.o
 
 all: ../auxin ../auxout ../cpmsim
 	@echo "done."
@@ -82,6 +83,9 @@ simfun.o : simfun.c sim.h
 
 simglb.o : simglb.c sim.h
 	$(CC) $(CFLAGS) simglb.c
+
+unix_terminal.o : ../../iodevices/unix_terminal.c
+	$(CC) $(CFLAGS) ../../iodevices/unix_terminal.c
 
 clean:
 	rm -f *.o

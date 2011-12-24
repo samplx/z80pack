@@ -22,6 +22,7 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 /*
@@ -55,6 +56,11 @@ int main(int argc, char *argv[])
 {
 	register char *s, *p;
 	register char *pn = argv[0];
+
+#ifdef CPU_SPEED
+	f_flag = CPU_SPEED;
+	tmax = CPU_SPEED * 10000;
+#endif
 
 	while (--argc >	0 && (*++argv)[0] == '-')
 		for (s = argv[0] + 1; *s != '\0'; s++)
@@ -121,13 +127,17 @@ usage:				printf("usage:\t%s -s -l -i -z -mn -fn -xfilename\n", pn);
 	puts(" #      #     #  #   #          #     #    #    #     #");
 	puts("#######  #####    ###            #####    ###   #     #");
 	printf("\nRelease %s, %s\n", RELEASE, COPYR);
+	if (f_flag > 0)
+		printf("\nCPU speed is %d MHz\n", f_flag);
+	else
+		printf("\nCPU speed is unlimited\n");
 #ifdef	USR_COM
-	printf("%s Release %s, %s\n", USR_COM, USR_REL,	USR_CPR);
+	printf("\n%s Release %s, %s\n", USR_COM, USR_REL, USR_CPR);
 #endif
-	putchar('\n');
 	fflush(stdout);
 
-	wrk_ram	= PC = STACK = ram;
+	wrk_ram	= PC = ram;
+	STACK = ram + 0xffff;
 	memset((char *)	ram, m_flag, 65536);
 	if (l_flag)
 		if (load_core())
@@ -288,7 +298,7 @@ static int load_mos(int fd, char *fn)
 		rc = 1;
 	}
 	close(fd);
-	printf("Loader statistics for file %s:\n", fn);
+	printf("\nLoader statistics for file %s:\n", fn);
 	printf("START : %04x\n", (unsigned int)(wrk_ram - ram));
 	printf("END   : %04x\n", (unsigned int)(wrk_ram - ram + readed - 1));
 	printf("LOADED: %04x\n\n", readed);
@@ -350,8 +360,7 @@ static int load_hex(char *fn)
 		s++;
 		if (addr < saddr)
 			saddr = addr;
-		if (addr > eaddr)
-			eaddr = addr + count - 1;
+		eaddr = addr + count - 1;
 		s += 2;
 		for (i = 0; i < count; i++) {
 			data = (*s <= '9') ? (*s - '0') << 4 :
@@ -365,7 +374,7 @@ static int load_hex(char *fn)
 	}
 
 	fclose(fd);
-	printf("Loader statistics for file %s:\n", fn);
+	printf("\nLoader statistics for file %s:\n", fn);
 	printf("START : %04x\n", saddr);
 	printf("END   : %04x\n", eaddr);
 	printf("LOADED: %04x\n\n", eaddr - saddr + 1);

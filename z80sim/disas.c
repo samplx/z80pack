@@ -2,6 +2,7 @@
  * Z80 disassembler for	Z80-CPU	simulator
  *
  * Copyright (C) 1989-2008 by Udo Munk
+ * Parts Copyright (C) 2008 by Justin Clancy
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
@@ -22,9 +23,12 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 #include <stdio.h>
+#include <string.h>
+#include "sim.h"
 
 /*
  *	Forward	declarations
@@ -82,7 +86,7 @@ static struct opt optab[256] = {
 	{ opout,  "RRA"			},	/* 0x1f	*/
 	{ rout,	  "JR\tNZ,"		},	/* 0x20	*/
 	{ nnout,  "LD\tHL,"		},	/* 0x21	*/
-	{ inout,  "LD\t(%04x),HL"	},	/* 0x22	*/
+	{ inout,  "LD\t(%04X),HL"	},	/* 0x22	*/
 	{ opout,  "INC\tHL"		},	/* 0x23	*/
 	{ opout,  "INC\tH"		},	/* 0x24	*/
 	{ opout,  "DEC\tH"		},	/* 0x25	*/
@@ -90,7 +94,7 @@ static struct opt optab[256] = {
 	{ opout,  "DAA"			},	/* 0x27	*/
 	{ rout,	  "JR\tZ,"		},	/* 0x28	*/
 	{ opout,  "ADD\tHL,HL"		},	/* 0x29	*/
-	{ inout,  "LD\tHL,(%04x)"	},	/* 0x2a	*/
+	{ inout,  "LD\tHL,(%04X)"	},	/* 0x2a	*/
 	{ opout,  "DEC\tHL"		},	/* 0x2b	*/
 	{ opout,  "INC\tL"		},	/* 0x2c	*/
 	{ opout,  "DEC\tL"		},	/* 0x2d	*/
@@ -98,7 +102,7 @@ static struct opt optab[256] = {
 	{ opout,  "CPL"			},	/* 0x2f	*/
 	{ rout,	  "JR\tNC,"		},	/* 0x30	*/
 	{ nnout,  "LD\tSP,"		},	/* 0x31	*/
-	{ inout,  "LD\t(%04x),A"	},	/* 0x32	*/
+	{ inout,  "LD\t(%04X),A"	},	/* 0x32	*/
 	{ opout,  "INC\tSP"		},	/* 0x33	*/
 	{ opout,  "INC\t(HL)"		},	/* 0x34	*/
 	{ opout,  "DEC\t(HL)"		},	/* 0x35	*/
@@ -106,7 +110,7 @@ static struct opt optab[256] = {
 	{ opout,  "SCF"			},	/* 0x37	*/
 	{ rout,	  "JR\tC,"		},	/* 0x38	*/
 	{ opout,  "ADD\tHL,SP"		},	/* 0x39	*/
-	{ inout,  "LD\tA,(%04x)"	},	/* 0x3a	*/
+	{ inout,  "LD\tA,(%04X)"	},	/* 0x3a	*/
 	{ opout,  "DEC\tSP"		},	/* 0x3b	*/
 	{ opout,  "INC\tA"		},	/* 0x3c	*/
 	{ opout,  "DEC\tA"		},	/* 0x3d	*/
@@ -259,7 +263,7 @@ static struct opt optab[256] = {
 	{ opout,  "RET\tNC"		},	/* 0xd0	*/
 	{ opout,  "POP\tDE"		},	/* 0xd1	*/
 	{ nnout,  "JP\tNC,"		},	/* 0xd2	*/
-	{ iout,	  "OUT\t(%02x),A"	},	/* 0xd3	*/
+	{ iout,	  "OUT\t(%02X),A"	},	/* 0xd3	*/
 	{ nnout,  "CALL\tNC,"		},	/* 0xd4	*/
 	{ opout,  "PUSH\tDE"		},	/* 0xd5	*/
 	{ nout,	  "SUB\t"		},	/* 0xd6	*/
@@ -267,7 +271,7 @@ static struct opt optab[256] = {
 	{ opout,  "RET\tC"		},	/* 0xd8	*/
 	{ opout,  "EXX"			},	/* 0xd9	*/
 	{ nnout,  "JP\tC,"		},	/* 0xda	*/
-	{ iout,	  "IN\tA,(%02x)"	},	/* 0xdb	*/
+	{ iout,	  "IN\tA,(%02X)"	},	/* 0xdb	*/
 	{ nnout,  "CALL\tC,"		},	/* 0xdc	*/
 	{ ddfd,	  ""			},	/* 0xdd	*/
 	{ nout,	  "SBC\tA,"		},	/* 0xde	*/
@@ -312,6 +316,47 @@ static char *reg[] = { "B", "C", "D", "E", "H",	"L", "(HL)", "A" };
 static char *regix = "IX";
 static char *regiy = "IY";
 
+/* globals for passing disassembled code to anyone else who's interested */
+
+char Disass_Str[64];
+char Opcode_Str[64];
+
+#ifdef WANT_GUI
+
+/* Set up machine code hex in Opcode_Str for GUI disassembly */
+
+void get_opcodes(unsigned char **p, int len)
+{
+  switch (len)
+  {
+    case 1:
+      sprintf(Opcode_Str, "%02X         ",
+                (**p & 0xff));
+      break;
+
+    case 2:
+      sprintf(Opcode_Str, "%02X %02X      ",
+                (**p & 0xff), *(*p + 1) & 0xff);
+      break;
+
+    case 3:
+      sprintf(Opcode_Str, "%02X %02X %02X   ",
+                (**p & 0xff), *(*p + 1) & 0xff,
+                *(*p + 2) & 0xff);
+      break;
+
+    case 4:
+      sprintf(Opcode_Str, "%02X %02X %02X %02X",
+                (**p & 0xff), *(*p + 1) & 0xff,
+                *(*p + 2) & 0xff, *(*p + 3) & 0xff);
+      break;
+
+    default:
+      sprintf(Opcode_Str, "xx OW OW xx");
+  }
+}
+#endif
+
 /*
  *	The function disass() is the only global function of
  *	this module. The first argument is a pointer to a
@@ -331,6 +376,12 @@ void disass(unsigned char **p, int adr)
 
 	addr = adr;
 	len = (*optab[**p].fun)	(optab[**p].text, p);
+#ifndef WANT_GUI
+	printf(Disass_Str);
+#endif
+#ifdef WANT_GUI
+        get_opcodes(p, len);
+#endif
 	*p += len;
 }
 
@@ -339,7 +390,7 @@ void disass(unsigned char **p, int adr)
  */
 static int opout(char *s, char **p)
 {
-	puts(s);
+	sprintf(Disass_Str, "%s\n", s);
 	return(1);
 }
 
@@ -348,7 +399,7 @@ static int opout(char *s, char **p)
  */
 static int nout(char *s, unsigned char **p)
 {
-	printf("%s%02x\n", s, *(*p + 1));
+	sprintf(Disass_Str, "%s%02X\n", s, *(*p + 1));
 	return(2);
 }
 
@@ -357,8 +408,8 @@ static int nout(char *s, unsigned char **p)
  */
 static int iout(char *s, unsigned char **p)
 {
-	printf(s, *(*p + 1));
-	putchar('\n');
+	sprintf(Disass_Str, s, *(*p + 1));
+	strcat(Disass_Str, "\n");
 	return(2);
 }
 
@@ -367,7 +418,7 @@ static int iout(char *s, unsigned char **p)
  */
 static int rout(char *s, char **p)
 {
-	printf("%s%04x\n", s, addr + *(*p + 1) + 2);
+	sprintf(Disass_Str, "%s%04X\n", s, addr + *(*p + 1) + 2);
 	return(2);
 }
 
@@ -379,7 +430,7 @@ static int nnout(char *s, unsigned char **p)
 	register int i;
 
 	i = *(*p + 1) +	(*(*p +	2) << 8);
-	printf("%s%04x\n", s, i);
+	sprintf(Disass_Str, "%s%04X\n", s, i);
 	return(3);
 }
 
@@ -391,8 +442,8 @@ static int inout(char *s, unsigned char **p)
 	register int i;
 
 	i = *(*p + 1) +	(*(*p +	2) << 8);
-	printf(s, i);
-	putchar('\n');
+	sprintf(Disass_Str, s, i);
+	strcat(Disass_Str, "\n");
 	return(3);
 }
 
@@ -405,59 +456,56 @@ static int cbop(char *s, unsigned char **p)
 
 	b2 = *(*p + 1);
 	if (b2 >= 0x00 && b2 <=	0x07) {
-		printf("RLC\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "RLC\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x08 && b2 <=	0x0f) {
-		printf("RRC\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "RRC\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x10 && b2 <=	0x17) {
-		printf("RL\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "RL\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x18 && b2 <=	0x1f) {
-		printf("RR\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "RR\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x20 && b2 <=	0x27) {
-		printf("SLA\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "SLA\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x28 && b2 <=	0x2f) {
-		printf("SRA\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "SRA\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x38 && b2 <=	0x3f) {
-		printf("SRL\t");
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "SRL\t%s\n",
+			reg[b2 & 7]);
 		return(2);
 	}
 	if (b2 >= 0x40 && b2 <=	0x7f) {
-		printf("BIT\t");
-		printf("%c,", ((b2 >> 3) & 7) +	'0');
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "BIT\t%c,%s\n",
+			((b2 >> 3) & 7) + '0', reg[b2 &	7]);
 		return(2);
 	}
 	if (b2 >= 0x80 && b2 <=	0xbf) {
-		printf("RES\t");
-		printf("%c,", ((b2 >> 3) & 7) +	'0');
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "RES\t%c,%s\n",
+			((b2 >> 3) & 7) + '0', reg[b2 &	7]);
 		return(2);
 	}
 	if (b2 >= 0xc0)	{
-		printf("SET\t");
-		printf("%c,", ((b2 >> 3) & 7) +	'0');
-		printf("%s\n", reg[b2 &	7]);
+		sprintf(Disass_Str, "SET\t%c,%s\n",
+			((b2 >> 3) & 7) + '0', reg[b2 &	7]);
 		return(2);
 	}
-	puts(unkown);
+	strcat(Disass_Str, unkown);
 	return(2);
 }
 
@@ -469,190 +517,191 @@ static int edop(char *s, unsigned char **p)
 	register int b2, i;
 	int len	= 2;
 
+	Disass_Str[0] = 0;
 	b2 = *(*p + 1);
 	switch (b2) {
 	case 0x40:
-		puts("IN\tB,(C)");
+		strcat(Disass_Str, "IN\tB,(C)\n");
 		break;
 	case 0x41:
-		puts("OUT\t(C),B");
+		strcat(Disass_Str, "OUT\t(C),B\n");
 		break;
 	case 0x42:
-		puts("SBC\tHL,BC");
+		strcat(Disass_Str, "SBC\tHL,BC\n");
 		break;
 	case 0x43:
 		i = *(*p + 2) +	(*(*p +	3) << 8);
-		printf("LD\t(%04x),BC\n", i);
+		sprintf(Disass_Str, "LD\t(%04X),BC\n", i);
 		len = 4;
 		break;
 	case 0x44:
-		puts("NEG");
+		strcat(Disass_Str, "NEG\n");
 		break;
 	case 0x45:
-		puts("RETN");
+		strcat(Disass_Str, "RETN\n");
 		break;
 	case 0x46:
-		puts("IM\t0");
+		strcat(Disass_Str, "IM\t0\n");
 		break;
 	case 0x47:
-		puts("LD\tI,A");
+		strcat(Disass_Str, "LD\tI,A\n");
 		break;
 	case 0x48:
-		puts("IN\tC,(C)");
+		strcat(Disass_Str, "IN\tC,(C)\n");
 		break;
 	case 0x49:
-		puts("OUT\t(C),C");
+		strcat(Disass_Str, "OUT\t(C),C\n");
 		break;
 	case 0x4a:
-		puts("ADC\tHL,BC");
+		strcat(Disass_Str, "ADC\tHL,BC\n");
 		break;
 	case 0x4b:
 		i = *(*p + 2) +	(*(*p +	3) << 8);
-		printf("LD\tBC,(%04x)\n", i);
+		sprintf(Disass_Str, "LD\tBC,(%04X)\n", i);
 		len = 4;
 		break;
 	case 0x4d:
-		puts("RETI");
+		strcat(Disass_Str, "RETI\n");
 		break;
 	case 0x4f:
-		puts("LD\tR,A");
+		strcat(Disass_Str, "LD\tR,A\n");
 		break;
 	case 0x50:
-		puts("IN\tD,(C)");
+		strcat(Disass_Str, "IN\tD,(C)\n");
 		break;
 	case 0x51:
-		puts("OUT\t(C),D");
+		strcat(Disass_Str, "OUT\t(C),D\n");
 		break;
 	case 0x52:
-		puts("SBC\tHL,DE");
+		strcat(Disass_Str, "SBC\tHL,DE\n");
 		break;
 	case 0x53:
 		i = *(*p + 2) +	(*(*p +	3) << 8);
-		printf("LD\t(%04x),DE\n", i);
+		sprintf(Disass_Str, "LD\t(%04X),DE\n", i);
 		len = 4;
 		break;
 	case 0x56:
-		puts("IM\t1");
+		strcat(Disass_Str, "IM\t1\n");
 		break;
 	case 0x57:
-		puts("LD\tA,I");
+		strcat(Disass_Str, "LD\tA,I\n");
 		break;
 	case 0x58:
-		puts("IN\tE,(C)");
+		strcat(Disass_Str, "IN\tE,(C)\n");
 		break;
 	case 0x59:
-		puts("OUT\t(C),E");
+		strcat(Disass_Str, "OUT\t(C),E\n");
 		break;
 	case 0x5a:
-		puts("ADC\tHL,DE");
+		strcat(Disass_Str, "ADC\tHL,DE\n");
 		break;
 	case 0x5b:
 		i = *(*p + 2) +	(*(*p +	3) << 8);
-		printf("LD\tDE,(%04x)\n", i);
+		sprintf(Disass_Str, "LD\tDE,(%04X)\n", i);
 		len = 4;
 		break;
 	case 0x5e:
-		puts("IM\t2");
+		strcat(Disass_Str, "IM\t2\n");
 		break;
 	case 0x5f:
-		puts("LD\tA,R");
+		strcat(Disass_Str, "LD\tA,R\n");
 		break;
 	case 0x60:
-		puts("IN\tH,(C)");
+		strcat(Disass_Str, "IN\tH,(C)\n");
 		break;
 	case 0x61:
-		puts("OUT\t(C),H");
+		strcat(Disass_Str, "OUT\t(C),H\n");
 		break;
 	case 0x62:
-		puts("SBC\tHL,HL");
+		strcat(Disass_Str, "SBC\tHL,HL\n");
 		break;
 	case 0x67:
-		puts("RRD");
+		strcat(Disass_Str, "RRD\n");
 		break;
 	case 0x68:
-		puts("IN\tL,(C)");
+		strcat(Disass_Str, "IN\tL,(C)\n");
 		break;
 	case 0x69:
-		puts("OUT\t(C),L");
+		strcat(Disass_Str, "OUT\t(C),L\n");
 		break;
 	case 0x6a:
-		puts("ADC\tHL,HL");
+		strcat(Disass_Str, "ADC\tHL,HL\n");
 		break;
 	case 0x6f:
-		puts("RLD");
+		strcat(Disass_Str, "RLD\n");
 		break;
 	case 0x72:
-		puts("SBC\tHL,SP");
+		strcat(Disass_Str, "SBC\tHL,SP\n");
 		break;
 	case 0x73:
 		i = *(*p + 2) +	(*(*p +	3) << 8);
-		printf("LD\t(%04x),SP\n", i);
+		sprintf(Disass_Str, "LD\t(%04X),SP\n", i);
 		len = 4;
 		break;
 	case 0x78:
-		puts("IN\tA,(C)");
+		strcat(Disass_Str, "IN\tA,(C)\n");
 		break;
 	case 0x79:
-		puts("OUT\t(C),A");
+		strcat(Disass_Str, "OUT\t(C),A\n");
 		break;
 	case 0x7a:
-		puts("ADC\tHL,SP");
+		strcat(Disass_Str, "ADC\tHL,SP\n");
 		break;
 	case 0x7b:
 		i = *(*p + 2) +	(*(*p +	3) << 8);
-		printf("LD\tSP,(%04x)\n", i);
+		sprintf(Disass_Str, "LD\tSP,(%04X)\n", i);
 		len = 4;
 		break;
 	case 0xa0:
-		puts("LDI");
+		strcat(Disass_Str, "LDI\n");
 		break;
 	case 0xa1:
-		puts("CPI");
+		strcat(Disass_Str, "CPI\n");
 		break;
 	case 0xa2:
-		puts("INI");
+		strcat(Disass_Str, "INI\n");
 		break;
 	case 0xa3:
-		puts("OUTI");
+		strcat(Disass_Str, "OUTI\n");
 		break;
 	case 0xa8:
-		puts("LDD");
+		strcat(Disass_Str, "LDD\n");
 		break;
 	case 0xa9:
-		puts("CPD");
+		strcat(Disass_Str, "CPD\n");
 		break;
 	case 0xaa:
-		puts("IND");
+		strcat(Disass_Str, "IND\n");
 		break;
 	case 0xab:
-		puts("OUTD");
+		strcat(Disass_Str, "OUTD\n");
 		break;
 	case 0xb0:
-		puts("LDIR");
+		strcat(Disass_Str, "LDIR\n");
 		break;
 	case 0xb1:
-		puts("CPIR");
+		strcat(Disass_Str, "CPIR\n");
 		break;
 	case 0xb2:
-		puts("INIR");
+		strcat(Disass_Str, "INIR\n");
 		break;
 	case 0xb3:
-		puts("OTIR");
+		strcat(Disass_Str, "OTIR\n");
 		break;
 	case 0xb8:
-		puts("LDDR");
+		strcat(Disass_Str, "LDDR\n");
 		break;
 	case 0xb9:
-		puts("CPDR");
+		strcat(Disass_Str, "CPDR\n");
 		break;
 	case 0xba:
-		puts("INDR");
+		strcat(Disass_Str, "INDR\n");
 		break;
 	case 0xbb:
-		puts("OTDR");
+		strcat(Disass_Str, "OTDR\n");
 		break;
 	default:
-		puts(unkown);
+		strcat(Disass_Str, unkown);
 	}
 	return(len);
 }
@@ -672,226 +721,226 @@ static int ddfd(char *s, unsigned char **p)
 		ireg = regiy;
 	b2 = *(*p + 1);
 	if (b2 >= 0x70 && b2 <=	0x77) {
-		printf("LD\t(%s+%02x),%s\n", ireg, *(*p	+ 2), reg[b2 & 7]);
+		sprintf(Disass_Str, "LD\t(%s+%02X),%s\n", ireg, *(*p	+ 2), reg[b2 & 7]);
 		return(3);
 	}
 	switch (b2) {
 	case 0x09:
-		printf("ADD\t%s,BC\n", ireg);
+		sprintf(Disass_Str, "ADD\t%s,BC\n", ireg);
 		len = 2;
 		break;
 	case 0x19:
-		printf("ADD\t%s,DE\n", ireg);
+		sprintf(Disass_Str, "ADD\t%s,DE\n", ireg);
 		len = 2;
 		break;
 	case 0x21:
-		printf("LD\t%s,%04x\n",	ireg, *(*p + 2)	+ (*(*p	+ 3) <<	8));
+		sprintf(Disass_Str, "LD\t%s,%04X\n",	ireg, *(*p + 2)	+ (*(*p	+ 3) <<	8));
 		len = 4;
 		break;
 	case 0x22:
-		printf("LD\t(%04x),%s\n", *(*p + 2) + (*(*p + 3) << 8),	ireg);
+		sprintf(Disass_Str, "LD\t(%04X),%s\n", *(*p + 2) + (*(*p + 3) << 8),	ireg);
 		len = 4;
 		break;
 	case 0x23:
-		printf("INC\t%s\n", ireg);
+		sprintf(Disass_Str, "INC\t%s\n", ireg);
 		len = 2;
 		break;
 	case 0x29:
 		if (**p	== 0xdd)
-			printf("ADD\tIX,IX\n");
+			sprintf(Disass_Str, "ADD\tIX,IX\n");
 		else
-			printf("ADD\tIY,IY\n");
+			sprintf(Disass_Str, "ADD\tIY,IY\n");
 		len = 2;
 		break;
 	case 0x2a:
-		printf("LD\t%s,(%04x)\n", ireg,	*(*p + 2) + (*(*p + 3) << 8));
+		sprintf(Disass_Str, "LD\t%s,(%04X)\n", ireg,	*(*p + 2) + (*(*p + 3) << 8));
 		len = 4;
 		break;
 	case 0x2b:
-		printf("DEC\t%s\n", ireg);
+		sprintf(Disass_Str, "DEC\t%s\n", ireg);
 		len = 2;
 		break;
 	case 0x34:
-		printf("INC\t(%s+%02x)\n", ireg, *(*p +	2));
+		sprintf(Disass_Str, "INC\t(%s+%02X)\n", ireg, *(*p +	2));
 		break;
 	case 0x35:
-		printf("DEC\t(%s+%02x)\n", ireg, *(*p +	2));
+		sprintf(Disass_Str, "DEC\t(%s+%02X)\n", ireg, *(*p +	2));
 		break;
 	case 0x36:
-		printf("LD\t(%s+%02x),%02x\n", ireg, *(*p + 2),	*(*p + 3));
+		sprintf(Disass_Str, "LD\t(%s+%02X),%02X\n", ireg, *(*p + 2),	*(*p + 3));
 		len = 4;
 		break;
 	case 0x39:
-		printf("ADD\t%s,SP\n", ireg);
+		sprintf(Disass_Str, "ADD\t%s,SP\n", ireg);
 		len = 2;
 		break;
 	case 0x46:
-		printf("LD\tB,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tB,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x4e:
-		printf("LD\tC,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tC,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x56:
-		printf("LD\tD,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tD,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x5e:
-		printf("LD\tE,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tE,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x66:
-		printf("LD\tH,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tH,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x6e:
-		printf("LD\tL,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tL,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x7e:
-		printf("LD\tA,(%s+%02x)\n", ireg, *(*p + 2));
+		sprintf(Disass_Str, "LD\tA,(%s+%02X)\n", ireg, *(*p + 2));
 		break;
 	case 0x86:
-		printf("ADD\tA,(%s+%02x)\n", ireg, *(*p	+ 2));
+		sprintf(Disass_Str, "ADD\tA,(%s+%02X)\n", ireg, *(*p	+ 2));
 		break;
 	case 0x8e:
-		printf("ADC\tA,(%s+%02x)\n", ireg, *(*p	+ 2));
+		sprintf(Disass_Str, "ADC\tA,(%s+%02X)\n", ireg, *(*p	+ 2));
 		break;
 	case 0x96:
-		printf("SUB\t(%s+%02x)\n", ireg, *(*p +	2));
+		sprintf(Disass_Str, "SUB\t(%s+%02X)\n", ireg, *(*p +	2));
 		break;
 	case 0x9e:
-		printf("SBC\tA,(%s+%02x)\n", ireg, *(*p	+ 2));
+		sprintf(Disass_Str, "SBC\tA,(%s+%02X)\n", ireg, *(*p	+ 2));
 		break;
 	case 0xa6:
-		printf("AND\t(%s+%02x)\n", ireg, *(*p +	2));
+		sprintf(Disass_Str, "AND\t(%s+%02X)\n", ireg, *(*p +	2));
 		break;
 	case 0xae:
-		printf("XOR\t(%s+%02x)\n", ireg, *(*p +	2));
+		sprintf(Disass_Str, "XOR\t(%s+%02X)\n", ireg, *(*p +	2));
 		break;
 	case 0xb6:
-		printf("OR\t(%s+%02x)\n", ireg,	*(*p + 2));
+		sprintf(Disass_Str, "OR\t(%s+%02X)\n", ireg,	*(*p + 2));
 		break;
 	case 0xbe:
-		printf("CP\t(%s+%02x)\n", ireg,	*(*p + 2));
+		sprintf(Disass_Str, "CP\t(%s+%02X)\n", ireg,	*(*p + 2));
 		break;
 	case 0xcb:
 		switch (*(*p + 3)) {
 		case 0x06:
-			printf("RLC\t(%s+%02x)\n", ireg, *(*p +	2));
+			sprintf(Disass_Str, "RLC\t(%s+%02X)\n", ireg, *(*p +	2));
 			break;
 		case 0x0e:
-			printf("RRC\t(%s+%02x)\n", ireg, *(*p +	2));
+			sprintf(Disass_Str, "RRC\t(%s+%02X)\n", ireg, *(*p +	2));
 			break;
 		case 0x16:
-			printf("RL\t(%s+%02x)\n", ireg,	*(*p + 2));
+			sprintf(Disass_Str, "RL\t(%s+%02X)\n", ireg,	*(*p + 2));
 			break;
 		case 0x1e:
-			printf("RR\t(%s+%02x)\n", ireg,	*(*p + 2));
+			sprintf(Disass_Str, "RR\t(%s+%02X)\n", ireg,	*(*p + 2));
 			break;
 		case 0x26:
-			printf("SLA\t(%s+%02x)\n", ireg, *(*p +	2));
+			sprintf(Disass_Str, "SLA\t(%s+%02X)\n", ireg, *(*p +	2));
 			break;
 		case 0x2e:
-			printf("SRA\t(%s+%02x)\n", ireg, *(*p +	2));
+			sprintf(Disass_Str, "SRA\t(%s+%02X)\n", ireg, *(*p +	2));
 			break;
 		case 0x3e:
-			printf("SRL\t(%s+%02x)\n", ireg, *(*p +	2));
+			sprintf(Disass_Str, "SRL\t(%s+%02X)\n", ireg, *(*p +	2));
 			break;
 		case 0x46:
-			printf("BIT\t0,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t0,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x4e:
-			printf("BIT\t1,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t1,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x56:
-			printf("BIT\t2,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t2,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x5e:
-			printf("BIT\t3,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t3,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x66:
-			printf("BIT\t4,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t4,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x6e:
-			printf("BIT\t5,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t5,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x76:
-			printf("BIT\t6,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t6,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x7e:
-			printf("BIT\t7,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "BIT\t7,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x86:
-			printf("RES\t0,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t0,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x8e:
-			printf("RES\t1,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t1,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x96:
-			printf("RES\t2,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t2,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0x9e:
-			printf("RES\t3,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t3,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xa6:
-			printf("RES\t4,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t4,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xae:
-			printf("RES\t5,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t5,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xb6:
-			printf("RES\t6,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t6,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xbe:
-			printf("RES\t7,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "RES\t7,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xc6:
-			printf("SET\t0,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t0,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xce:
-			printf("SET\t1,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t1,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xd6:
-			printf("SET\t2,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t2,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xde:
-			printf("SET\t3,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t3,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xe6:
-			printf("SET\t4,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t4,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xee:
-			printf("SET\t5,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t5,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xf6:
-			printf("SET\t6,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t6,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		case 0xfe:
-			printf("SET\t7,(%s+%02x)\n", ireg, *(*p	+ 2));
+			sprintf(Disass_Str, "SET\t7,(%s+%02X)\n", ireg, *(*p	+ 2));
 			break;
 		default:
-			puts(unkown);
+			strcat(Disass_Str, unkown);
 		}
 		len = 4;
 		break;
 	case 0xe1:
-		printf("POP\t%s\n", ireg);
+		sprintf(Disass_Str, "POP\t%s\n", ireg);
 		len = 2;
 		break;
 	case 0xe3:
-		printf("EX\t(SP),%s\n",	ireg);
+		sprintf(Disass_Str, "EX\t(SP),%s\n",	ireg);
 		len = 2;
 		break;
 	case 0xe5:
-		printf("PUSH\t%s\n", ireg);
+		sprintf(Disass_Str, "PUSH\t%s\n", ireg);
 		len = 2;
 		break;
 	case 0xe9:
-		printf("JP\t(%s)\n", ireg);
+		sprintf(Disass_Str, "JP\t(%s)\n", ireg);
 		len = 2;
 		break;
 	case 0xf9:
-		printf("LD\tSP,%s\n", ireg);
+		sprintf(Disass_Str, "LD\tSP,%s\n", ireg);
 		len = 2;
 		break;
 	default:
-		puts(unkown);
+		strcat(Disass_Str, unkown);
 	}
 	return(len);
 }

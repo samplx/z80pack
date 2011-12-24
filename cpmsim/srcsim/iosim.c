@@ -35,6 +35,7 @@
  * 07-APR-08 added port to set/get CPU speed
  * 13-AUG-08 work on console I/O busy waiting detection
  * 24-AUG-08 changed terminal line discipline to not add CR if LF send
+ * xx-OCT-08 some improvments here and there
  */
 
 /*
@@ -107,7 +108,8 @@
 #include "sim.h"
 #include "simglb.h"
 
-#define MAX_BUSY_COUNT	10	/* max counter to detect I/O busy waiting
+#define BUFSIZE 256		/* max line lenght of command buffer */
+#define MAX_BUSY_COUNT 10	/* max counter to detect I/O busy waiting
 				   on the console status port */
 
 extern int boot(void);
@@ -175,7 +177,7 @@ static char char_mode[3] = {255, 251, 3}; /* telnet negotiation */
 static char will_echo[3] = {255, 251, 1}; /* telnet negotiation */
 static int cs;			/* client socket #1 descriptor */
 static int cs_port;		/* TCP/IP port for cs */
-static char cs_host[256];	/* hostname for cs */
+static char cs_host[BUFSIZE];	/* hostname for cs */
 
 #ifdef CNETDEBUG
 static int cdirection = -1; /* protocol direction, 0 = send, 1 = receive */
@@ -333,23 +335,223 @@ static BYTE (*port[256][2]) () = {
 	{ netd1_in, netd1_out  },	/* port 51 */
 	{ io_trap, io_trap  },		/* port 52 */
 	{ io_trap, io_trap  },		/* port 53 */
-	{ io_trap, io_trap  }		/* port 54 */
+	{ io_trap, io_trap  },		/* port 54 */
+	{ io_trap, io_trap },		/* port	55 */
+	{ io_trap, io_trap },		/* port	56 */
+	{ io_trap, io_trap },		/* port	57 */
+	{ io_trap, io_trap },		/* port	58 */
+	{ io_trap, io_trap },		/* port	59 */
+	{ io_trap, io_trap },		/* port	60 */
+	{ io_trap, io_trap },		/* port	61 */
+	{ io_trap, io_trap },		/* port	62 */
+	{ io_trap, io_trap },		/* port	63 */
+	{ io_trap, io_trap },		/* port	64 */
+	{ io_trap, io_trap },		/* port	65 */
+	{ io_trap, io_trap },		/* port	66 */
+	{ io_trap, io_trap },		/* port	67 */
+	{ io_trap, io_trap },		/* port	68 */
+	{ io_trap, io_trap },		/* port	69 */
+	{ io_trap, io_trap },		/* port	70 */
+	{ io_trap, io_trap },		/* port	71 */
+	{ io_trap, io_trap },		/* port	72 */
+	{ io_trap, io_trap },		/* port	73 */
+	{ io_trap, io_trap },		/* port	74 */
+	{ io_trap, io_trap },		/* port	75 */
+	{ io_trap, io_trap },		/* port	76 */
+	{ io_trap, io_trap },		/* port	77 */
+	{ io_trap, io_trap },		/* port	78 */
+	{ io_trap, io_trap },		/* port	79 */
+	{ io_trap, io_trap },		/* port	80 */
+	{ io_trap, io_trap },		/* port	81 */
+	{ io_trap, io_trap },		/* port	82 */
+	{ io_trap, io_trap },		/* port	83 */
+	{ io_trap, io_trap },		/* port	84 */
+	{ io_trap, io_trap },		/* port	85 */
+	{ io_trap, io_trap },		/* port	86 */
+	{ io_trap, io_trap },		/* port	87 */
+	{ io_trap, io_trap },		/* port	88 */
+	{ io_trap, io_trap },		/* port	89 */
+	{ io_trap, io_trap },		/* port	90 */
+	{ io_trap, io_trap },		/* port	91 */
+	{ io_trap, io_trap },		/* port	92 */
+	{ io_trap, io_trap },		/* port	93 */
+	{ io_trap, io_trap },		/* port	94 */
+	{ io_trap, io_trap },		/* port	95 */
+	{ io_trap, io_trap },		/* port	96 */
+	{ io_trap, io_trap },		/* port	97 */
+	{ io_trap, io_trap },		/* port	98 */
+	{ io_trap, io_trap },		/* port	99 */
+	{ io_trap, io_trap },		/* port	100 */
+	{ io_trap, io_trap },		/* port 101 */
+	{ io_trap, io_trap },		/* port	102 */
+	{ io_trap, io_trap },		/* port	103 */
+	{ io_trap, io_trap },		/* port	104 */
+	{ io_trap, io_trap },		/* port	105 */
+	{ io_trap, io_trap },		/* port	106 */
+	{ io_trap, io_trap },		/* port	107 */
+	{ io_trap, io_trap },		/* port	108 */
+	{ io_trap, io_trap },		/* port	109 */
+	{ io_trap, io_trap },		/* port	110 */
+	{ io_trap, io_trap },		/* port	111 */
+	{ io_trap, io_trap },		/* port	112 */
+	{ io_trap, io_trap },		/* port	113 */
+	{ io_trap, io_trap },		/* port	114 */
+	{ io_trap, io_trap },		/* port	115 */
+	{ io_trap, io_trap },		/* port	116 */
+	{ io_trap, io_trap },		/* port	117 */
+	{ io_trap, io_trap },		/* port	118 */
+	{ io_trap, io_trap },		/* port	119 */
+	{ io_trap, io_trap },		/* port	120 */
+	{ io_trap, io_trap },		/* port	121 */
+	{ io_trap, io_trap },		/* port	122 */
+	{ io_trap, io_trap },		/* port	123 */
+	{ io_trap, io_trap },		/* port	124 */
+	{ io_trap, io_trap },		/* port	125 */
+	{ io_trap, io_trap },		/* port	126 */
+	{ io_trap, io_trap },		/* port	127 */
+	{ io_trap, io_trap },		/* port	128 */
+	{ io_trap, io_trap },		/* port	129 */
+	{ io_trap, io_trap },		/* port	130 */
+	{ io_trap, io_trap },		/* port	131 */
+	{ io_trap, io_trap },		/* port	132 */
+	{ io_trap, io_trap },		/* port	133 */
+	{ io_trap, io_trap },		/* port	134 */
+	{ io_trap, io_trap },		/* port	135 */
+	{ io_trap, io_trap },		/* port	136 */
+	{ io_trap, io_trap },		/* port	137 */
+	{ io_trap, io_trap },		/* port	138 */
+	{ io_trap, io_trap },		/* port	139 */
+	{ io_trap, io_trap },		/* port	140 */
+	{ io_trap, io_trap },		/* port	141 */
+	{ io_trap, io_trap },		/* port	142 */
+	{ io_trap, io_trap },		/* port	143 */
+	{ io_trap, io_trap },		/* port	144 */
+	{ io_trap, io_trap },		/* port	145 */
+	{ io_trap, io_trap },		/* port	146 */
+	{ io_trap, io_trap },		/* port	147 */
+	{ io_trap, io_trap },		/* port	148 */
+	{ io_trap, io_trap },		/* port	149 */
+	{ io_trap, io_trap },		/* port	150 */
+	{ io_trap, io_trap },		/* port	151 */
+	{ io_trap, io_trap },		/* port	152 */
+	{ io_trap, io_trap },		/* port	153 */
+	{ io_trap, io_trap },		/* port	154 */
+	{ io_trap, io_trap },		/* port	155 */
+	{ io_trap, io_trap },		/* port	156 */
+	{ io_trap, io_trap },		/* port	157 */
+	{ io_trap, io_trap },		/* port	158 */
+	{ io_trap, io_trap },		/* port	159 */
+	{ io_trap, io_trap },		/* port	160 */
+	{ io_trap, io_trap },		/* port	161 */
+	{ io_trap, io_trap },		/* port	162 */
+	{ io_trap, io_trap },		/* port	163 */
+	{ io_trap, io_trap },		/* port	164 */
+	{ io_trap, io_trap },		/* port	165 */
+	{ io_trap, io_trap },		/* port	166 */
+	{ io_trap, io_trap },		/* port	167 */
+	{ io_trap, io_trap },		/* port	168 */
+	{ io_trap, io_trap },		/* port	169 */
+	{ io_trap, io_trap },		/* port	170 */
+	{ io_trap, io_trap },		/* port	171 */
+	{ io_trap, io_trap },		/* port	172 */
+	{ io_trap, io_trap },		/* port	173 */
+	{ io_trap, io_trap },		/* port	174 */
+	{ io_trap, io_trap },		/* port	175 */
+	{ io_trap, io_trap },		/* port	176 */
+	{ io_trap, io_trap },		/* port	177 */
+	{ io_trap, io_trap },		/* port	178 */
+	{ io_trap, io_trap },		/* port	179 */
+	{ io_trap, io_trap },		/* port	180 */
+	{ io_trap, io_trap },		/* port	181 */
+	{ io_trap, io_trap },		/* port	182 */
+	{ io_trap, io_trap },		/* port	183 */
+	{ io_trap, io_trap },		/* port	184 */
+	{ io_trap, io_trap },		/* port	185 */
+	{ io_trap, io_trap },		/* port	186 */
+	{ io_trap, io_trap },		/* port	187 */
+	{ io_trap, io_trap },		/* port	188 */
+	{ io_trap, io_trap },		/* port	189 */
+	{ io_trap, io_trap },		/* port	190 */
+	{ io_trap, io_trap },		/* port	191 */
+	{ io_trap, io_trap },		/* port	192 */
+	{ io_trap, io_trap },		/* port	193 */
+	{ io_trap, io_trap },		/* port	194 */
+	{ io_trap, io_trap },		/* port	195 */
+	{ io_trap, io_trap },		/* port	196 */
+	{ io_trap, io_trap },		/* port	197 */
+	{ io_trap, io_trap },		/* port	198 */
+	{ io_trap, io_trap },		/* port	199 */
+	{ io_trap, io_trap },		/* port	200 */
+	{ io_trap, io_trap },		/* port 201 */
+	{ io_trap, io_trap },		/* port	202 */
+	{ io_trap, io_trap },		/* port	203 */
+	{ io_trap, io_trap },		/* port	204 */
+	{ io_trap, io_trap },		/* port	205 */
+	{ io_trap, io_trap },		/* port	206 */
+	{ io_trap, io_trap },		/* port	207 */
+	{ io_trap, io_trap },		/* port	208 */
+	{ io_trap, io_trap },		/* port	209 */
+	{ io_trap, io_trap },		/* port	210 */
+	{ io_trap, io_trap },		/* port	211 */
+	{ io_trap, io_trap },		/* port	212 */
+	{ io_trap, io_trap },		/* port	213 */
+	{ io_trap, io_trap },		/* port	214 */
+	{ io_trap, io_trap },		/* port	215 */
+	{ io_trap, io_trap },		/* port	216 */
+	{ io_trap, io_trap },		/* port	217 */
+	{ io_trap, io_trap },		/* port	218 */
+	{ io_trap, io_trap },		/* port	219 */
+	{ io_trap, io_trap },		/* port	220 */
+	{ io_trap, io_trap },		/* port	221 */
+	{ io_trap, io_trap },		/* port	222 */
+	{ io_trap, io_trap },		/* port	223 */
+	{ io_trap, io_trap },		/* port	224 */
+	{ io_trap, io_trap },		/* port	225 */
+	{ io_trap, io_trap },		/* port	226 */
+	{ io_trap, io_trap },		/* port	227 */
+	{ io_trap, io_trap },		/* port	228 */
+	{ io_trap, io_trap },		/* port	229 */
+	{ io_trap, io_trap },		/* port	230 */
+	{ io_trap, io_trap },		/* port	231 */
+	{ io_trap, io_trap },		/* port	232 */
+	{ io_trap, io_trap },		/* port	233 */
+	{ io_trap, io_trap },		/* port	234 */
+	{ io_trap, io_trap },		/* port	235 */
+	{ io_trap, io_trap },		/* port	236 */
+	{ io_trap, io_trap },		/* port	237 */
+	{ io_trap, io_trap },		/* port	238 */
+	{ io_trap, io_trap },		/* port	239 */
+	{ io_trap, io_trap },		/* port	240 */
+	{ io_trap, io_trap },		/* port	241 */
+	{ io_trap, io_trap },		/* port	242 */
+	{ io_trap, io_trap },		/* port	243 */
+	{ io_trap, io_trap },		/* port	244 */
+	{ io_trap, io_trap },		/* port	245 */
+	{ io_trap, io_trap },		/* port	246 */
+	{ io_trap, io_trap },		/* port	247 */
+	{ io_trap, io_trap },		/* port	248 */
+	{ io_trap, io_trap },		/* port	249 */
+	{ io_trap, io_trap },		/* port	250 */
+	{ io_trap, io_trap },		/* port	251 */
+	{ io_trap, io_trap },		/* port	252 */
+	{ io_trap, io_trap },		/* port	253 */
+	{ io_trap, io_trap },		/* port	254 */
+	{ io_trap, io_trap }		/* port	255 */
 };
 
 /*
  *	This function initializes the I/O handlers:
- *	1. Initialize all unused ports with the I/O trap handler.
- *	2. Initialize the MMU with NULL pointers and defaults.
- *	3. Open the files which emulate the disk drives.
+ *	1. Initialize the MMU with NULL pointers and defaults.
+ *	2. Open the files which emulate the disk drives.
  *	   Errors for opening one of the drives results
  *	   in a NULL pointer for fd in the dskdef structure,
  *	   so that this drive can't be used.
- *	4. Create and open the file "printer.cpm" for emulation
+ *	3. Create and open the file "printer.cpm" for emulation
  *	   of a printer.
- *	5. Fork the process for receiving from the auxiliary serial port.
- *	6. Open the named pipes "auxin" and "auxout" for simulation
+ *	4. Fork the process for receiving from the auxiliary serial port.
+ *	5. Open the named pipes "auxin" and "auxout" for simulation
  *	   of the auxiliary serial port.
- *	7. Prepare TCP/IP sockets for serial port simulation
+ *	6. Prepare TCP/IP sockets for serial port simulation
  */
 void init_io(void)
 {
@@ -357,11 +559,6 @@ void init_io(void)
 #if defined(NETWORKING) && defined(TCPASYNC)
 	static struct sigaction newact;
 #endif
-
-	for (i = 55; i <= 255; i++) {
-		port[i][0] = io_trap;
-		port[i][1] = io_trap;
-	}
 
 	for (i = 0; i < MAXSEG; i++)
 		mmu[i] = NULL;
@@ -467,14 +664,14 @@ static void net_server_config(void)
 {
 	register int i;
 	FILE *fp;
-	char buf[256];
+	char buf[BUFSIZE];
 	char *s;
 
 	if ((fp = fopen("net_server.conf", "r")) != NULL) {
 		printf("Server network configuration:\n");
 		s = &buf[0];
-		while (fgets(s, 256, fp) != NULL) {
-			if (*s == '#')
+		while (fgets(s, BUFSIZE, fp) != NULL) {
+			if ((*s == '\n') || (*s == '#'))
 				continue;
 			i = atoi(s);
 			if ((i < 1) || (i > 4)) {
@@ -504,14 +701,14 @@ static void net_server_config(void)
 static void net_client_config(void)
 {
 	FILE *fp;
-	char buf[256];
+	char buf[BUFSIZE];
 	char *s, *d;
 
 	if ((fp = fopen("net_client.conf", "r")) != NULL) {
 		printf("Client network configuration:\n");
 		s = &buf[0];
-		while (fgets(s, 256, fp) != NULL) {
-			if (*s == '#')
+		while (fgets(s, BUFSIZE, fp) != NULL) {
+			if ((*s == '\n') || (*s == '#'))
 				continue;
 			while((*s != ' ') && (*s != '\t'))
 				s++;
@@ -585,7 +782,9 @@ void reset_system(void)
 
 	/* reset CPU */
 	IFF = 0;			/* disable interrupts */
-	wrk_ram	= PC = STACK = ram;	/* PC & SP = 0 */
+	int_mode = 0;			/* reset interrupt mode */
+	wrk_ram	= PC = ram;		/* PC = 0 */
+	STACK = ram + 0xffff;		/* SP = FFFF */
 
 	/* reboot */
 	boot();
@@ -623,7 +822,7 @@ static BYTE io_trap(void)
 		cpu_error = IOTRAP;
 		cpu_state = STOPPED;
 	}
-	return((BYTE) 0);
+	return((BYTE) 0xff);
 }
 
 /*

@@ -22,14 +22,17 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 #include <unistd.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <termios.h>
 #include <fcntl.h>
 #include "sim.h"
 #include "simglb.h"
+#include "../../iodevices/unix_terminal.h"
 
 int boot(void);
 
@@ -45,26 +48,22 @@ struct termios old_term, new_term;
  */
 void mon(void)
 {
-	tcgetattr(0, &old_term);
-	new_term = old_term;
-	new_term.c_lflag &= ~(ICANON | ECHO);
-	new_term.c_iflag &= ~(IXON | IXANY | IXOFF);
-	new_term.c_iflag &= ~(IGNCR | ICRNL | INLCR);
-	new_term.c_oflag &= ~(ONLCR | OCRNL);
-	new_term.c_cc[VMIN] = 1;
-#ifndef CNTL_Z
-	new_term.c_cc[VSUSP] = 0;
-#endif
-	tcsetattr(0, TCSADRAIN, &new_term);
+	/* load boot code into memory */
+	if (boot())
+		exit(1);
 
-	if (!boot()) {
-		cpu_state = CONTIN_RUN;
-		cpu_error = NONE;
-		cpu();
-	}
+	/* initialize terminal */
+	set_unix_terminal();
 
-	tcsetattr(0, TCSADRAIN, &old_term);
+	/* start CPU emulation */
+	cpu_state = CONTIN_RUN;
+	cpu_error = NONE;
+	cpu();
 
+	/* reset terminal */
+	reset_unix_terminal();
+
+	/* check for CPU emulation errors and report */
 	switch (cpu_error) {
 	case NONE:
 		break;
@@ -93,6 +92,8 @@ void mon(void)
 		break;
 	case USERINT:
 		printf("\nUser Interrupt at %04x\n", (unsigned int)(PC - ram));
+		break;
+	case POWEROFF:
 		break;
 	default:
 		printf("\nUnknown error %d\n", cpu_error);

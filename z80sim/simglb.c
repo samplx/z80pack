@@ -22,6 +22,7 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 /*
@@ -48,6 +49,12 @@ long R;				/* Z80 refresh register */
 				/* is normaly a 8 bit register	*/
 				/* the 32 bits are used to measure the */
 				/* clock frequency */
+
+#ifdef BUS_8080			/* CPU bus status, for frontpanels */
+BYTE cpu_bus;
+#endif
+
+BYTE mem_wp;			/* memory write-protect flag */
 
 /*
  *	Variables for memory of the emulated CPU
@@ -83,6 +90,15 @@ BYTE *t_end = ram + 65535;	/* end address for measurement */
 #endif
 
 /*
+ *	Variables for frontpanel emulation
+ */
+#ifdef FRONTPANEL
+unsigned long long fp_clock;
+WORD fp_led_address;		/* lights for address bus */
+BYTE fp_led_data;		/* ligths for data bus */
+#endif
+
+/*
  *	Flags to control operation of simulation
  */
 int s_flag;			/* flag	for -s option */
@@ -95,7 +111,7 @@ int f_flag;			/* flag for -f option */
 int z_flag;			/* flag for -z option */
 #endif
 char xfn[LENCMD];		/* buffer for filename (option -x) */
-int cpu_state;			/* status of CPU emulation */
+BYTE cpu_state;			/* status of CPU emulation */
 int cpu_error;			/* error status of CPU emulation */
 int int_type;			/* type	of interrupt */
 int tmax;			/* max t-stats to execute in 10ms */

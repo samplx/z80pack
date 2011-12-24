@@ -25,6 +25,7 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 /*
@@ -111,7 +112,7 @@ void io_out(BYTE adr, BYTE data)
 }
 
 /*
- *	I/O trap funtion
+ *	I/O trap function
  *	This function should be added into all unused
  *	entrys of the port array. It stops the emulation
  *	with an I/O error.

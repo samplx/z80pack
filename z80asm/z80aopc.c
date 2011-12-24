@@ -1,6 +1,6 @@
 /*
  *	Z80 - Assembler
- *	Copyright (C) 1987-2007 by Udo Munk
+ *	Copyright (C) 1987-2008 by Udo Munk
  *
  *	History:
  *	17-SEP-1987 Development under Digital Research CP/M 2.2
@@ -8,6 +8,7 @@
  *	21-OCT-2006 changed to ANSI C for modern POSIX OS's
  *	03-FEB-2007 more ANSI C conformance and reduced compiler warnings
  *	18-MAR-2007 use default output file extension dependend on format
+ *	04-OCT-2008 fixed comment bug, ';' string argument now working
  */
 
 /*

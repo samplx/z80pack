@@ -22,6 +22,7 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 /*
@@ -31,6 +32,10 @@
 
 #include "sim.h"
 #include "simglb.h"
+
+#ifdef FRONTPANEL
+#include "../../frontpanel/frontpanel.h"
+#endif
 
 static int trap_cb(void);
 static int op_srla(void), op_srlb(void), op_srlc(void);
@@ -472,6 +477,12 @@ static int op_srlhl(void)		/* SRL (HL) */
 {
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	p = ram	+ (H <<	8) + L;
 	(*p & 1) ? (F |= C_FLAG) : (F &= ~C_FLAG);
 	*p >>= 1;
@@ -479,6 +490,12 @@ static int op_srlhl(void)		/* SRL (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -563,6 +580,12 @@ static int op_slahl(void)		/* SLA (HL) */
 {
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	p = ram	+ (H <<	8) + L;
 	(*p & 128) ? (F	|= C_FLAG) : (F	&= ~C_FLAG);
 	*p <<= 1;
@@ -570,6 +593,12 @@ static int op_slahl(void)		/* SLA (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -683,6 +712,12 @@ static int op_rlhl(void)		/* RL (HL) */
 	register int old_c_flag;
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	p = ram	+ (H <<	8) + L;
 	old_c_flag = F & C_FLAG;
 	(*p & 128) ? (F	|= C_FLAG) : (F	&= ~C_FLAG);
@@ -692,6 +727,12 @@ static int op_rlhl(void)		/* RL (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -805,6 +846,12 @@ static int op_rrhl(void)		/* RR (HL) */
 	register int old_c_flag;
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	old_c_flag = F & C_FLAG;
 	p = ram	+ (H <<	8) + L;
 	(*p & 1) ? (F |= C_FLAG) : (F &= ~C_FLAG);
@@ -814,6 +861,12 @@ static int op_rrhl(void)		/* RR (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -927,6 +980,12 @@ static int op_rrchl(void)		/* RRC (HL) */
 	register int i;
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	p = ram	+ (H <<	8) + L;
 	i = *p & 1;
 	(i) ? (F |= C_FLAG) : (F &= ~C_FLAG);
@@ -936,6 +995,12 @@ static int op_rrchl(void)		/* RRC (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -1049,6 +1114,12 @@ static int op_rlchl(void)		/* RLC (HL) */
 	register int i;
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	p = ram	+ (H <<	8) + L;
 	i = *p & 128;
 	(i) ? (F |= C_FLAG) : (F &= ~C_FLAG);
@@ -1058,6 +1129,12 @@ static int op_rlchl(void)		/* RLC (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -1171,6 +1248,12 @@ static int op_srahl(void)		/* SRA (HL) */
 	register int i;
 	register BYTE *p;
 
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	p = ram	+ (H <<	8) + L;
 	i = *p & 128;
 	(*p & 1) ? (F |= C_FLAG) : (F &= ~C_FLAG);
@@ -1180,6 +1263,12 @@ static int op_srahl(void)		/* SRA (HL) */
 	(*p) ? (F &= ~Z_FLAG) :	(F |= Z_FLAG);
 	(*p & 128) ? (F	|= S_FLAG) : (F	&= ~S_FLAG);
 	(parrity[*p]) ?	(F &= ~P_FLAG) : (F |= P_FLAG);
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -1521,49 +1610,145 @@ static int op_sb7l(void)		/* SET 7,L */
 
 static int op_sb0hl(void)		/* SET 0,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 1;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb1hl(void)		/* SET 1,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 2;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb2hl(void)		/* SET 2,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 4;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb3hl(void)		/* SET 3,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 8;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb4hl(void)		/* SET 4,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 16;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb5hl(void)		/* SET 5,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 32;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb6hl(void)		/* SET 6,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 64;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_sb7hl(void)		/* SET 7,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) |= 128;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -1905,49 +2090,145 @@ static int op_rb7l(void)		/* RES 7,L */
 
 static int op_rb0hl(void)		/* RES 0,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~1;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb1hl(void)		/* RES 1,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~2;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb2hl(void)		/* RES 2,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~4;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb3hl(void)		/* RES 3,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~8;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb4hl(void)		/* RES 4,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~16;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb5hl(void)		/* RES 5,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~32;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb6hl(void)		/* RES 6,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~64;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
 static int op_rb7hl(void)		/* RES 7,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	*(ram +	(H << 8) + L) &= ~128;
+#ifdef BUS_8080
+	cpu_bus = 0;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	return(15);
 }
 
@@ -2443,6 +2724,12 @@ static int op_tb7l(void)		/* BIT 7,L */
 
 static int op_tb0hl(void)		/* BIT 0,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 1) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2452,6 +2739,12 @@ static int op_tb0hl(void)		/* BIT 0,(HL) */
 
 static int op_tb1hl(void)		/* BIT 1,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 2) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2461,6 +2754,12 @@ static int op_tb1hl(void)		/* BIT 1,(HL) */
 
 static int op_tb2hl(void)		/* BIT 2,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 4) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2470,6 +2769,12 @@ static int op_tb2hl(void)		/* BIT 2,(HL) */
 
 static int op_tb3hl(void)		/* BIT 3,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 8) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2479,6 +2784,12 @@ static int op_tb3hl(void)		/* BIT 3,(HL) */
 
 static int op_tb4hl(void)		/* BIT 4,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 16) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2488,6 +2799,12 @@ static int op_tb4hl(void)		/* BIT 4,(HL) */
 
 static int op_tb5hl(void)		/* BIT 5,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 32) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2497,6 +2814,12 @@ static int op_tb5hl(void)		/* BIT 5,(HL) */
 
 static int op_tb6hl(void)		/* BIT 6,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~(N_FLAG | S_FLAG);
 	F |= H_FLAG;
 	(*(ram + (H << 8) + L) & 64) ? (F &= ~(Z_FLAG | P_FLAG))
@@ -2506,6 +2829,12 @@ static int op_tb6hl(void)		/* BIT 6,(HL) */
 
 static int op_tb7hl(void)		/* BIT 7,(HL) */
 {
+#ifdef BUS_8080
+	cpu_bus = CPU_WO | CPU_MEMR;
+#endif
+#ifdef FRONTPANEL
+	fp_sampleLightGroup(0, 0);
+#endif
 	F &= ~N_FLAG;
 	F |= H_FLAG;
 	if (*(ram + (H << 8) + L) & 128) {

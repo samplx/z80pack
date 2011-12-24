@@ -22,22 +22,25 @@
  * 06-OCT-07 Release 1.14 bug fixes and improvements
  * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  * 25-AUG-08 Release 1.16 console status I/O loop detection and line discipline
+ * 20-OCT-08 Release 1.17 frontpanel integrated and Altair/IMSAI emulations
  */
 
 /*
  *	The following defines may be activated, commented or modified
  *	by user for her/his own purpose.
  */
+#define CPU_SPEED 0	/* default CPU speed */
 #define Z80_UNDOC	/* compile undocumented Z80 instructions */
 #define WANT_INT	/* interrupt for MP/M */
 /*#define WANT_SPC*/	/* faster and normaly not needed with CP/M */
 /*#define WANT_PCC*/	/* faster and normaly not needed with CP/M */
 /*#define CNTL_C*/	/* don't abort simulation with cntl-c */
 #define CNTL_BS		/* emergency exit with cntl-\ :-) */
-/*#define CNTL_Z*/	/* don't suspend simulation with cntl-z */
 #define WANT_TIM	/* run length measurement needed to adjust CPU speed */
 /*#define HISIZE  1000*//* no history */
 /*#define SBSIZE  10*/	/* no breakpoints */
+/*#define FRONTPANEL*/	/* no frontpanel emulation */
+/*#define BUS_8080*/	/* no emulation of 8080 bus status */
 #define PIPES		/* use named pipes for auxiliary device */
 #define NETWORKING	/* TCP/IP networked serial ports */
 #define NUMSOC	4	/* number of server sockets */
@@ -54,7 +57,7 @@
  *	The following lines of this file should not be modified by user
  */
 #define COPYR	"Copyright (C) 1987-2008 by Udo Munk"
-#define RELEASE	"1.16"
+#define RELEASE	"1.17"
 
 #define LENCMD		80		/* length of command buffers etc */
 
@@ -67,8 +70,17 @@
 #define N_FLAG		2
 #define C_FLAG		1
 
+#define CPU_MEMR	128		/* bit definitions for CPU bus status */
+#define CPU_INP		64
+#define CPU_M1		32
+#define CPU_OUT		16
+#define CPU_HLTA	8
+#define CPU_STACK	4
+#define CPU_WO		2
+#define	CPU_INTA	1
+
 					/* operation of simulated CPU */
-#define	SINGLE_STEP	0		/* single step */
+#define	SINGLE_STEP	3		/* single step */
 #define	CONTIN_RUN	1		/* continual run */
 #define	STOPPED		0		/* stop CPU because of error */
 
@@ -81,6 +93,7 @@
 #define	OPTRAP2		5		/* illegal 2 byte op-code trap */
 #define	OPTRAP4		6		/* illegal 4 byte op-code trap */
 #define	USERINT		7		/* user	interrupt */
+#define POWEROFF	255		/* CPU off, no error */
 
 					/* type of CPU interrupt */
 #define INT_NONE	0
