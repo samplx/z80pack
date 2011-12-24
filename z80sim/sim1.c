@@ -8,12 +8,16 @@
  * 11-JAN-89 Release 1.1
  * 08-FEB-89 Release 1.2
  * 13-MAR-89 Release 1.3
- * 09-FEB-90 Release 1.4 Ported to TARGON/31 M10/30
- * 20-DEC-90 Release 1.5 Ported to COHERENT 3.0
- * 10-JUN-92 Release 1.6 long casting problem solved with COHERENT 3.2
- *			 and some optimization
- * 25-JUN-92 Release 1.7 comments in english
- * 04-OCT-06 Release 1.8 modified to compile on modern POSIX OS's
+ * 09-FEB-90 Release 1.4  Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5  Ported to COHERENT 3.0
+ * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
+ *			  and some optimization
+ * 25-JUN-92 Release 1.7  comments in english
+ * 04-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 18-NOV-06 Release 1.9  modified to work with CP/M sources
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
+ * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
  */
 
 #include <unistd.h>
@@ -367,7 +371,8 @@ void cpu(void)
 	};
 
 #ifdef WANT_TIM
-	register int t;
+	register int t = 0;
+	struct timespec timer;
 #endif
 
 	do {
@@ -442,9 +447,14 @@ void cpu(void)
 #endif
 
 #ifdef WANT_TIM
-		t = (*op_sim[*PC++]) ();/* execute next opcode */
+		t += (*op_sim[*PC++]) ();/* execute next opcode */
 		if (f_flag) {		/* adjust CPU speed */
-
+			if (t > tmax) {
+				timer.tv_sec = 0;
+				timer.tv_nsec = 10000000;
+				nanosleep(&timer, NULL);
+				t = 0;
+			}
 		}
 #else
 		(*op_sim[*PC++]) ();
@@ -496,7 +506,7 @@ static int op_halt(void)		/* HALT */
 			timer.tv_sec = 0;
 			timer.tv_nsec = 10000000;
 			nanosleep(&timer, NULL);
-			R += 99999;
+			R += 9999;
 		}
 	return(0);
 }

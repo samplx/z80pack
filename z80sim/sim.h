@@ -16,9 +16,10 @@
  *			  and some optimization
  * 25-JUN-92 Release 1.7  comments in english
  * 03-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
- * 18-NOV-06 Release 1.9  work on CP/M emulation
- * 08-DEC-06 Release 1.10 work on CP/M emulation
- * 17-DEC-06 Release 1.11 CP/NET 1.1 working
+ * 18-NOV-06 Release 1.9  modified to work with CP/M sources
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
+ * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
  */
 
 /*
@@ -50,7 +51,7 @@
  *	The following lines of this file should not be modified by user
  */
 #define	COPYR	"Copyright (C) 1987-2006 by Udo Munk"
-#define	RELEASE	"1.11"
+#define	RELEASE	"1.12"
 
 #define	LENCMD		80		/* length of command buffers etc */
 

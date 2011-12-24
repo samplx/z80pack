@@ -267,7 +267,7 @@ SYS2:	LD	A,(HL)
 	JP	SYS2
 ;
 SYS3:	IM	1
-	LD	A,1		;enable 20ms interrupt timer
+	LD	A,1		;enable 10ms interrupt timer
 	OUT	(TIMER),A
 	EI
 	RET
@@ -302,7 +302,7 @@ INTHND1:
 	LD	HL,CNT50	;decrement tick counter
 	DEC	(HL)
 	JP	NZ,INTDONE
-	LD	(HL),50		;set flag #2 each second
+	LD	(HL),100	;set flag #2 each second
 	LD	C,FLAGSET
 	LD	E,2
 	CALL	XDOS
@@ -424,7 +424,7 @@ PREEMP:	DEFB	0		;preempted flag
 SVDHL:	DEFS	2		;save hl during interrupt
 SVDRET:	DEFS	2		;save return address during interrupt
 SVDSP:	DEFS	2		;save sp during interrupt
-CNT50:	DEFB	50		;50 ticks a 20ms = 1 second
+CNT50:	DEFB	100		;100 ticks a 10ms = 1 second
 				;interrupt stack
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H

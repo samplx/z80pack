@@ -8,12 +8,16 @@
  * 11-JAN-89 Release 1.1
  * 08-FEB-89 Release 1.2
  * 13-MAR-89 Release 1.3
- * 09-FEB-90 Release 1.4 Ported to TARGON/31 M10/30
- * 20-DEC-90 Release 1.5 Ported to COHERENT 3.0
- * 10-JUN-92 Release 1.6 long casting problem solved with COHERENT 3.2
- *			 and some optimization
- * 25-JUN-92 Release 1.7 comments in english and ported to COHERENT 4.0
- * 03-OCT-06 Release 1.8 modified to compile on modern POSIX OS's
+ * 09-FEB-90 Release 1.4  Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5  Ported to COHERENT 3.0
+ * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
+ *			  and some optimization
+ * 25-JUN-92 Release 1.7  comments in english and ported to COHERENT 4.0
+ * 03-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 18-NOV-06 Release 1.9  modified to work with CP/M sources
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
+ * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
  */
 
 /*
@@ -65,7 +69,7 @@ int main(int argc, char *argv[])
 			case 'f':
 				f_flag = atoi(s+1);
 				s += strlen(s+1);
-				freq = (float) 1 / (float) f_flag;
+				tmax = f_flag * 10000;
 				break;
 			case 'x':	/* get filename with Z80 executable */
 				x_flag = 1;
@@ -86,7 +90,7 @@ usage:				printf("usage:\t%s -s -l -i -h -mn -fn -xfilename\n", pn);
 				puts("\ti = trap on I/O to unused ports");
 				puts("\th = execute HALT op-code");
 				puts("\tm = init memory with n");
-				puts("\tf = CPU frequenzy n in MHz (not implemented yet)");
+				puts("\tf = CPU frequenzy n in MHz");
 				puts("\tx = load and execute filename");
 				exit(1);
 			}

@@ -8,12 +8,16 @@
  * 11-JAN-89 Release 1.1
  * 08-FEB-89 Release 1.2
  * 13-MAR-89 Release 1.3
- * 09-FEB-90 Release 1.4 Ported to TARGON/31 M10/30
- * 20-DEC-90 Release 1.5 Ported to COHERENT 3.0
- * 10-JUN-92 Release 1.6 long casting problem solved with COHERENT 3.2
- *			 and some optimization
- * 25-JUN-92 Release 1.7 comments in english and ported to COHERENT 4.0
- * 03-OCT-06 Release 1.8 modified to compile on modern POSIX OS's
+ * 09-FEB-90 Release 1.4  Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5  Ported to COHERENT 3.0
+ * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
+ *			  and some optimization
+ * 25-JUN-92 Release 1.7  comments in english and ported to COHERENT 4.0
+ * 03-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 18-NOV-06 Release 1.9  modified to work with CP/M sources
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
+ * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
  */
 
 /*
@@ -30,7 +34,7 @@ extern BYTE	ram[],*wrk_ram;
 extern int	s_flag,l_flag,m_flag,x_flag,break_flag,i_flag,f_flag,
 		cpu_state, cpu_error,int_type,int_mode,cntl_c,cntl_bs,
 		parrity[],sb_next;
-extern float	freq;
+extern int	tmax;
 
 extern char	xfn[];
 

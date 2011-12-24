@@ -20,6 +20,7 @@
  * 08-DEC-06 modified MMU so that segment size can be configured
  * 10-DEC-06 started adding serial port for a passive TCP/IP socket
  * 14-DEC-06 started adding serial port for a client TCP/IP socket
+ * 25-DEC-06 CPU speed option and 100 ticks interrupt
  */
 
 /*
@@ -1216,7 +1217,7 @@ static int to_bcd(int val)
 
 /*
  *	Calculate number of days since 1.1.1978
- *	The Y2K bug here is intentional, CP/M 3 has a Y2K bug fix
+ *	CP/M 3 and MP/M 2 are Y2K bug fixed and can handle the date
  */
 static int get_date(struct tm *t)
 {
@@ -1246,9 +1247,9 @@ static BYTE time_out(BYTE data)
 		newact.sa_handler = int_timer;
 		sigaction(SIGALRM, &newact, NULL);
 		tim.it_value.tv_sec = 0;
-		tim.it_value.tv_usec = 20000;
+		tim.it_value.tv_usec = 10000;
 		tim.it_interval.tv_sec = 0;
-		tim.it_interval.tv_usec = 20000;
+		tim.it_interval.tv_usec = 10000;
 		setitimer(ITIMER_REAL, &tim, NULL);
 	} else {
 		timer = 0;

@@ -8,12 +8,16 @@
  * 11-JAN-89 Release 1.1
  * 08-FEB-89 Release 1.2
  * 13-MAR-89 Release 1.3
- * 09-FEB-90 Release 1.4 Ported to TARGON/31 M10/30
- * 20-DEC-90 Release 1.5 Ported to COHERENT
- * 10-JUN-92 Release 1.6 long casting problem solved with COHERENT 3.2
- *			 and some optimization
- * 25-JUN-92 Release 1.7 comments in english and ported to COHERENT 4.0
- * 04-OCT-06 Release 1.8 modified to compile on modern POSIX OS's
+ * 09-FEB-90 Release 1.4  Ported to TARGON/31 M10/30
+ * 20-DEC-90 Release 1.5  Ported to COHERENT
+ * 10-JUN-92 Release 1.6  long casting problem solved with COHERENT 3.2
+ *			  and some optimization
+ * 25-JUN-92 Release 1.7  comments in english and ported to COHERENT 4.0
+ * 04-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
+ * 18-NOV-06 Release 1.9  modified to work with CP/M sources
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
+ * 25-DEC-06 Release 1.12 CPU speed option and 100 ticks interrupt
  */
 
 /*
@@ -28,7 +32,7 @@
 BYTE A,B,C,D,E,H,L;		/* Z80 primary registers */
 int  F;				/* normaly 8-Bit, but int is faster */
 WORD IX, IY;
-BYTE A_,B_,C_,D_,E_,H_,L_;	/* Z80 secoundary registers */
+BYTE A_,B_,C_,D_,E_,H_,L_;	/* Z80 alternate registers */
 int  F_;
 BYTE *PC;			/* Z80 programm counter */
 BYTE *STACK;			/* Z80 stackpointer */
@@ -86,7 +90,7 @@ int break_flag = 1;		/* 1 = break at HALT, 0 = execute HALT */
 int cpu_state;			/* status of CPU emulation */
 int cpu_error;			/* error status of CPU emulation */
 int int_type;			/* type	of interrupt */
-float freq;			/* CPU clock in usec */
+int tmax;			/* max t-stats to execute in 10ms */
 int int_mode;			/* CPU interrupt mode (IM 0, IM 1, IM 2) */
 int cntl_c;			/* flag	for cntl-c entered */
 int cntl_bs;			/* flag	for cntl-\ entered */
