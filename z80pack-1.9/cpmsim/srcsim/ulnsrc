@@ -1,0 +1,6 @@
+# use this to unlink the common parts of Z80 simulation
+
+rm sim[0-7].c
+rm simfun.c
+rm simint.c
+rm simglb.[hc]
