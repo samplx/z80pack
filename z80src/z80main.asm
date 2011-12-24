@@ -16,7 +16,7 @@ PRTSTR:				; print 0 terminated string
 	LD	A,(HL)		; next char -> A
 	OR	A		; 0 ?
 	RET	Z		; yes, done
-	OUT	(0),A		; no, print it
+	OUT	(1),A		; no, print it
 	INC	HL		; increase pointer to string
 	JP	PRTSTR		; process next char
 

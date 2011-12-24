@@ -2,8 +2,8 @@
 ;
 ;	Copyright (C) 1989-2007 by Udo Munk
 ;
-	.Z80
-	CSEG
+NMBCNS	EQU	5		;number of consoles
+TICKPS	EQU	100		;number of ticks per second
 ;
 ;	i/o ports
 ;
@@ -32,7 +32,15 @@ FDCSH	EQU	17		;fdc-port: # of sector high
 MMUINI	EQU	20		;initialize mmu
 MMUSEL	EQU	21		;bank select mmu
 MMUSEG	EQU	22		;configure segment size mmu
+CLKCMD	EQU	25		;clock command
+CLKDAT	EQU	26		;clock data
 TIMER	EQU	27		;interrupt timer
+;
+;	clock commands
+;
+GETSEC	EQU	0		;get seconds
+;
+;	XDOS functions
 ;
 POLL	EQU	131		;xdos poll function
 PLCO0	EQU	0		;poll console out #0
@@ -46,6 +54,9 @@ PLCI3	EQU	7		;poll console in #3
 PLCO4	EQU	8		;poll console out #4
 PLCI4	EQU	9		;poll console in #4
 FLAGSET	EQU	133		;xdos flag set function
+;
+	.Z80
+	CSEG
 ;
 ;	jump vector for individual subroutines
 ;
@@ -369,7 +380,7 @@ EXITREGION:
 ;	maximum console number
 ;
 MAXCONSOLE:
-	LD	A,5
+	LD	A,NMBCNS
 	RET
 ;
 ;	system initialization
@@ -439,10 +450,19 @@ INTHND:	LD	(SVDHL),HL	;save registers
 	LD	E,1
 	CALL	XDOS
 INTHND1:
-	LD	HL,CNT50	;decrement tick counter
+	LD	A,GETSEC	;get seconds from hardware clock
+	OUT	(CLKCMD),A
+	IN	A,(CLKDAT)
+	OR	A		;full minute?
+	JP	NZ,INTHND2
+	LD	C,FLAGSET	;set flag #4 each full minute
+	LD	E,4
+	CALL	XDOS
+INTHND2:
+	LD	HL,CNTSEC	;decrement tick counter
 	DEC	(HL)
 	JP	NZ,INTDONE
-	LD	(HL),100	;set flag #2 each second
+	LD	(HL),TICKPS	;set flag #2 each second
 	LD	C,FLAGSET
 	LD	E,2
 	CALL	XDOS
@@ -565,7 +585,7 @@ WAITIO: OUT	(FDCOP),A	;start i/o operation
 ;	XIOS data segment
 ;
 SIGNON:	DEFB	13,10
-	DEFM	'MP/M 2 XIOS V1.6-NET for Z80SIM, '
+	DEFM	'MP/M 2 XIOS V1.7-NET-1 for Z80SIM, '
 	DEFM	'Copyright 1989-2007 by Udo Munk'
 	DEFB	13,10,0
 ;
@@ -574,7 +594,7 @@ PREEMP:	DEFB	0		;preempted flag
 SVDHL:	DEFS	2		;save hl during interrupt
 SVDRET:	DEFS	2		;save return address during interrupt
 SVDSP:	DEFS	2		;save sp during interrupt
-CNT50:	DEFB	100		;100 ticks a 10ms = 1 second
+CNTSEC:	DEFB	TICKPS		;ticks per second counter
 				;interrupt stack
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H

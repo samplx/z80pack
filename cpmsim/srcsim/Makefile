@@ -1,9 +1,17 @@
 CC = gcc
 
-CFLAGS = -O -c -Wall
+# Platform independend compiler optimization
+CFLAGS = -O3 -c -Wall
 
-# Linux, BSD
+# Intel Pentium M (Centrino) and gcc 4.1.1
+#CFLAGS = -O3 -march=i686 -minline-all-stringops -funroll-loops -c -Wall
+
+# AMD Opteron and gcc 3.3.5
+#CFLAGS = -O3 -mcpu=i686 -minline-all-stringops -c -Wall
+
+# Linux, BSD, Cygwin
 LFLAGS = -s
+
 # Solaris 9
 #LFLAGS = -s -lsocket -lnsl -lrt
 
@@ -34,7 +42,7 @@ all: ../auxin ../auxout ../cpmsim
 	$(CC) $(OBJ) $(LFLAGS) -o ../cpmsim
 
 sim0.c:
-	lnsrc
+	./lnsrc
 
 sim0.o : sim0.c sim.h simglb.h
 	$(CC) $(CFLAGS) sim0.c
@@ -77,4 +85,8 @@ simglb.o : simglb.c sim.h
 
 clean:
 	rm -f *.o
-	ulnsrc
+	./ulnsrc
+
+allclean:
+	make clean
+	rm -f ../auxin ../auxout ../cpmsim ../cpmsim.exe

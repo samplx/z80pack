@@ -41,7 +41,7 @@ WBOOTE: JP	WBOOT		;warm start
 	JP	CONOUT		;console character out
 	JP	LIST		;list character out
 	JP	PUNCH		;punch character out
-	JP	READER		;reader character out
+	JP	READER		;reader character in
 	JP	HOME		;move head to home position
 	JP	SELDSK		;select disk
 	JP	SETTRK		;set track number

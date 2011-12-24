@@ -1,11 +1,17 @@
-# Makefile for Z80-CPU emulator unter UNIX System V
-
 CC = gcc
 
-CFLAGS = -O -c -Wall
+# Platform independend compiler optimization
+CFLAGS = -O3 -c -Wall
+
+# Intel Pentium M (Centrino) and gcc 4.1.1
+#CFLAGS = -O3 -march=i686 -minline-all-stringops -funroll-loops -c -Wall
+
+# AMD Opteron and gcc 3.3.5
+#CFLAGS = -O3 -mcpu=i686 -minline-all-stringops -c -Wall
 
 # Linux, BSD
 LFLAGS = -s
+
 # Solaris 9
 #LFLAGS = -s -lrt
 

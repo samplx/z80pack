@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
@@ -20,6 +20,7 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 /*
@@ -32,7 +33,7 @@
 
 static int trap_ed(void);
 static int op_im0(void), op_im1(void), op_im2(void);
-static int op_reti(void),	op_retn(void);
+static int op_reti(void), op_retn(void);
 static int op_neg(void);
 static int op_inaic(void), op_inbic(void), op_incic(void);
 static int op_indic(void), op_ineic(void);
@@ -399,7 +400,7 @@ static int op_neg(void)			/* NEG */
 {
 	(A) ? (F |= C_FLAG) : (F &= ~C_FLAG);
 	(A == 0x80) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(0 - ((char) A & 0xf) <	0) ? (F	|= H_FLAG) : (F	&= ~H_FLAG);
+	(0 - ((signed char) A & 0xf) <	0) ? (F	|= H_FLAG) : (F	&= ~H_FLAG);
 	A = 0 -	A;
 	F |= N_FLAG;
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
@@ -777,21 +778,20 @@ static int op_ldinsp(void)		/* LD (nn),SP */
 
 static int op_adchb(void)		/* ADC HL,BC */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl, bc;
-	register long i;
+	int carry, lcarry;
+	register short hl, bc;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	lcarry = (L + C > 255) ? 1 : 0;
-	((H & 0xf) + (B & 0xf) + carry + lcarry > 0xf) ? (F |= H_FLAG)
-						       : (F &= ~H_FLAG);
+	lcarry = (L + C + carry > 255) ? 1 : 0;
+	((H & 0xf) + (B & 0xf) + lcarry > 0xf) ? (F |= H_FLAG)
+					       : (F &= ~H_FLAG);
 	hl = (H	<< 8) +	L;
 	bc = (B	<< 8) +	C;
-	i = ((long)hl) + ((long)bc) + carry;
-	((hl < 0x8000) && (i > 0x7fffL)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i > 0xffffL) ?	(F |= C_FLAG) :	(F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	i = hl + bc + carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	(H + B + lcarry > 255) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F &= ~N_FLAG;
@@ -801,21 +801,20 @@ static int op_adchb(void)		/* ADC HL,BC */
 
 static int op_adchd(void)		/* ADC HL,DE */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl, de;
-	register long i;
+	int carry, lcarry;
+	register short hl, de;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	lcarry = (L + E > 255) ? 1 : 0;
-	((H & 0xf) + (D & 0xf) + carry + lcarry > 0xf) ? (F |= H_FLAG)
-						       : (F &= ~H_FLAG);
+	lcarry = (L + E + carry > 255) ? 1 : 0;
+	((H & 0xf) + (D & 0xf) + lcarry > 0xf) ? (F |= H_FLAG)
+					       : (F &= ~H_FLAG);
 	hl = (H	<< 8) +	L;
 	de = (D	<< 8) +	E;
-	i = ((long)hl) + ((long)de) + carry;
-	((hl < 0x8000) && (i > 0x7fffL)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i > 0xffffL) ?	(F |= C_FLAG) :	(F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	i = hl + de + carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	(H + D + lcarry > 255) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F &= ~N_FLAG;
@@ -825,20 +824,19 @@ static int op_adchd(void)		/* ADC HL,DE */
 
 static int op_adchh(void)		/* ADC HL,HL */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl;
-	register long i;
+	int carry, lcarry;
+	register short hl;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	lcarry = (L + L > 255) ? 1 : 0;
-	((H & 0xf) + (H & 0xf) + carry + lcarry > 0xf) ? (F |= H_FLAG)
-						       : (F &= ~H_FLAG);
+	lcarry = (L + L + carry > 255) ? 1 : 0;
+	((H & 0xf) + (H & 0xf) + lcarry > 0xf) ? (F |= H_FLAG)
+					       : (F &= ~H_FLAG);
 	hl = (H	<< 8) +	L;
-	i = ((((long)hl) << 1) + carry);
-	((hl < 0x8000) && (i > 0x7fffL)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i > 0xffffL) ?	(F |= C_FLAG) :	(F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	i = (hl << 1) + carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	(H + H + lcarry > 255) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F &= ~N_FLAG;
@@ -848,21 +846,20 @@ static int op_adchh(void)		/* ADC HL,HL */
 
 static int op_adchs(void)		/* ADC HL,SP */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl, sp;
-	register long i;
+	int carry, lcarry;
+	register short hl, sp;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
 	hl = (H	<< 8) +	L;
 	sp = STACK - ram;
-	lcarry = (L + (sp & 0xff) > 255) ? 1 : 0;
-	((H & 0xf) + ((sp >> 8) & 0xf) + carry + lcarry > 0xf) ? (F |= H_FLAG)
-							       : (F &= ~H_FLAG);
-	i = ((long)hl) + ((long)sp) + carry;
-	((hl < 0x8000) && (i > 0x7fffL)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i > 0xffffL) ?	(F |= C_FLAG) :	(F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	lcarry = (L + (sp & 0xff) + carry > 255) ? 1 : 0;
+	((H & 0xf) + ((sp >> 8) & 0xf) + lcarry > 0xf) ? (F |= H_FLAG)
+						       : (F &= ~H_FLAG);
+	i = hl + sp + carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	(H + (sp >> 8) + lcarry > 255) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F &= ~N_FLAG;
@@ -872,21 +869,20 @@ static int op_adchs(void)		/* ADC HL,SP */
 
 static int op_sbchb(void)		/* SBC HL,BC */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl, bc;
-	register long i;
+	int carry, lcarry;
+	register short hl, bc;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	lcarry = (C > L) ? 1 : 0;
-	((B & 0xf) + carry + lcarry > (H & 0xf)) ? (F |= H_FLAG)
-						 : (F &= ~H_FLAG);
+	lcarry = (C + carry > L) ? 1 : 0;
+	((B & 0xf) + lcarry > (H & 0xf)) ? (F |= H_FLAG)
+					 : (F &= ~H_FLAG);
 	hl = (H	<< 8) +	L;
 	bc = (B	<< 8) +	C;
-	i = ((long)hl) - ((long)bc) - carry;
-	((hl > 0x7fff) && (i < 0x8000L)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i < 0L) ? (F |= C_FLAG) : (F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	i = hl - bc - carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	((WORD)bc + carry > (WORD)hl) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F |= N_FLAG;
@@ -896,21 +892,20 @@ static int op_sbchb(void)		/* SBC HL,BC */
 
 static int op_sbchd(void)		/* SBC HL,DE */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl, de;
-	register long i;
+	int carry, lcarry;
+	register short hl, de;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	lcarry = (E > L) ? 1 : 0;
-	((D & 0xf) + carry + lcarry > (H & 0xf)) ? (F |= H_FLAG)
-						 : (F &= ~H_FLAG);
+	lcarry = (E + carry > L) ? 1 : 0;
+	((D & 0xf) + lcarry > (H & 0xf)) ? (F |= H_FLAG)
+					 : (F &= ~H_FLAG);
 	hl = (H	<< 8) +	L;
 	de = (D	<< 8) +	E;
-	i = ((long)hl) - ((long)de) - carry;
-	((hl > 0x7fff) && (i < 0x8000L)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i < 0L) ? (F |= C_FLAG) : (F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	i = hl - de - carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	((WORD)de + carry > (WORD)hl) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F |= N_FLAG;
@@ -920,35 +915,42 @@ static int op_sbchd(void)		/* SBC HL,DE */
 
 static int op_sbchh(void)		/* SBC HL,HL */
 {
-	if (F &	C_FLAG)	{
-		F |= S_FLAG | P_FLAG | N_FLAG |	C_FLAG | H_FLAG;
-		F &= ~Z_FLAG;
-		H = L =	255;
-	} else {
-		F |= Z_FLAG | N_FLAG;
-		F &= ~(S_FLAG |	P_FLAG | C_FLAG | H_FLAG);
-		H = L =	0;
-	}
+	int carry, lcarry;
+	register short hl;
+	int i;
+
+	carry =	(F & C_FLAG) ? 1 : 0;
+	lcarry = (L + carry > L) ? 1 : 0;
+	((H & 0xf) + lcarry > (H & 0xf)) ? (F |= H_FLAG)
+					 : (F &= ~H_FLAG);
+	hl = (H	<< 8) +	L;
+	i = hl - hl - carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	((WORD)hl + carry > (WORD)hl) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	H = i >> 8;
+	L = i;
+	F |= N_FLAG;
+	(H & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	return(15);
 }
 
 static int op_sbchs(void)		/* SBC HL,SP */
 {
-	register int carry;
-	int lcarry;
-	register WORD hl, sp;
-	register long i;
+	int carry, lcarry;
+	register short hl, sp;
+	int i;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
 	hl = (H	<< 8) +	L;
 	sp = STACK - ram;
-	lcarry = ((sp & 0xff) > L) ? 1 : 0;
-	(((sp >> 8) & 0xf) + carry + lcarry > (H & 0xf)) ? (F |= H_FLAG)
-							 : (F &= ~H_FLAG);
-	i = ((long)hl) - ((long)sp) - carry;
-	((hl > 0x7fff) && (i < 0x8000L)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
-	(i < 0L) ? (F |= C_FLAG) : (F &= ~C_FLAG);
-	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	lcarry = ((sp & 0xff) + carry > L) ? 1 : 0;
+	(((sp >> 8) & 0xf) + lcarry > (H & 0xf)) ? (F |= H_FLAG)
+						 : (F &= ~H_FLAG);
+	i = hl - sp - carry;
+	((i > 32767) || (i < -32768)) ? (F |= P_FLAG) : (F &= ~P_FLAG);
+	((WORD)sp + carry > (WORD)hl) ? (F |= C_FLAG) : (F &= ~C_FLAG);
+	(i & 0xffff) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	H = i >> 8;
 	L = i;
 	F |= N_FLAG;

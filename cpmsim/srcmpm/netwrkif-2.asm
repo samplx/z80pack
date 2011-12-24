@@ -19,13 +19,12 @@
 ;
 ;  Modified December 2006 for Z80SIM by Udo Munk
 ;*/
-
 	
 false	equ	0
 true	equ	not false
 debug	equ	false
 
-WtchDg	equ	true		; include watch dog timer
+WtchDg	equ	false		; include watch dog timer
 
 mutexin	equ	false		; provide mutual exclusion on input
 mutexout equ	false		; provide mutual exclusion on output
@@ -53,7 +52,7 @@ bdosadr:
 	if	debug
 	dw	0005h
 	else
-	dw	$-$		;XDOS entry point for RSP version
+	dw	$-$		; XDOS entry point for RSP version
 	endif
 
 ;  Network Interface Process #0
@@ -409,7 +408,7 @@ BufferQ3:
 
 	if	WtchDg
 ;  Watchdog Timer Process
-;
+
 WatchDogPD:
 
 	if	NmbSlvs GT 1
@@ -634,63 +633,62 @@ char$out:
 	dad	h
 	dad	h
 	dad	d
-	mvi	a,10h		;load "get transmit status" value
-	pchl			;dispatch 
+	pchl			; dispatch 
 
 out0:
 	in	Console1$status
 	ani	2
-	jz	out0
-
+	jz	out0out			; no network connection
 	mov	a,c
-	out	Console1$status+1	;write the character
+	out	Console1$status+1	; write the character
+out0out:
 	pop	b
 	pop	d
 	pop	h
 	ret
-	nop			;filler to get 16 bytes, see dispatcher above
+	nop			; filler to get 16 bytes, see dispatcher above
 	nop
 
 out1:
 	in	Console2$status
 	ani	2
-	jz	out1
-
+	jz	out1out			; no network connection
 	mov	a,c
-	out	Console2$status+1
+	out	Console2$status+1	; write the character
+out1out:
 	pop	b
 	pop	d
 	pop	h
 	ret
-	nop			;filler to get 16 bytes, see dispatcher above
+	nop			; filler to get 16 bytes, see dispatcher above
 	nop
 
 out2:
 	in	Console3$status
 	ani	2
-	jz	out2
-
+	jz	out2out			; no network connection
 	mov	a,c
-	out	Console3$status+1
+	out	Console3$status+1	; write the character
+out2out:
 	pop	b
 	pop	d
 	pop	h
 	ret
-	nop			;filler to get 16 bytes, see dispatcher above
+	nop			; filler to get 16 bytes, see dispatcher above
 	nop
 
 out3:
 	in	Console4$status
 	ani	2
-	jz	out3
-
+	jz	out3out			; no network connection
 	mov	a,c
-	out	Console4$status+1
+	out	Console4$status+1	; write the character
+out3out:
 	pop	b
 	pop	d
 	pop	h
 	ret
-	nop			;filler to get 16 bytes, see dispatcher above
+	nop			; filler to get 16 bytes, see dispatcher above
 	nop
 
 Nibin:				; return nibble in A register
@@ -719,7 +717,6 @@ xChar$in:			; Get the first character using polled
 				; message will be received using direct
 				; port I/O with interrupts disabled.
 				; OVERRUNS ARE NOT POSSIBLE USING THIS SCHEME
-
 	push	h
 	push	b
 	lxi	h, Charin$return
@@ -877,7 +874,7 @@ Netin:				; byte returned in A register
 	lda	BinaryASCII
 	ora	a
 	jz	ASCIIin
-	call	charin		;receive byte in Binary mode
+	call	charin		; receive byte in Binary mode
 	rc
 	jmp	chksin
 
@@ -995,7 +992,7 @@ send:
 
 	xchg
 	push	h
-	di			; disable interrupts to avoid underrun
+;	di			; disable interrupts to avoid underrun
 	mvi	c,ENQ
 	call	Charout		; send ENQ
 	call	getACK		; won't return on an error
@@ -1029,7 +1026,7 @@ send:
 	call	release$MX
 	endif
 
-	ei			; return from suspended animation
+;	ei			; return from suspended animation
 	xra	a
 	ret			; A = 0, successful send message
 
@@ -1075,7 +1072,7 @@ receive:
 
 ; 	a return to this point indicates an error
 receive$retry:
-	ei			; re-enable other processes
+;	ei			; re-enable other processes
 
 	if	mutexin
 	push	b
@@ -1110,7 +1107,7 @@ get$ENQ:			; get first character of message using
 	endif
 
 	mvi	c,ACK
-	di			; requester in gear now serve only him
+;	di			; requester in gear now serve only him
 
 	call	charout		; send ACK to requester, allowing transmit
 	call	Charin
@@ -1166,7 +1163,7 @@ sendACK:			; come here if message was received properly
 	call	Charout		; send ACK if checksum ok
 	pop	d		; discard return address
 	pop	d		; discard message address
-	ei			; Dispense with the Rip Van Winkle act
+;	ei			; Dispense with the Rip Van Winkle act
 
 	if	mutexin
 	call	release$MX
@@ -1276,7 +1273,7 @@ WatchDogDec:
 ;	Setup code for Network Interface Procedures
 
 Setup:
-	push	psw		;create stack image of all reentrant variables
+	push	psw		; create stack image of all reentrant variables
 	push	b
 	push	d
 	push	h
@@ -1293,23 +1290,23 @@ Setup:
 	endif
 
 	if	WtchDg
-	lxi	d,WatchDogPD	;since this process is linked to all other
-				;NtwrkIPx processes, creating it creates all
-				;of the others
+	lxi	d,WatchDogPD	; since this process is linked to all other
+				; NtwrkIPx processes, creating it creates all
+				; of the others
 	mvi	c,createp
 	call	bdos
 
 	else
 
 	if	NmbSlvs GE 2
-	lxi	d,NtwrkIP1	;this will create all the other NtwrkIPx
-				;processes if there's no watchdog
+	lxi	d,NtwrkIP1	; this will create all the other NtwrkIPx
+				; processes if there's no watchdog
 	mvi	c,createp
 	call	bdos
 	endif
 	endif
 
-	mvi	c,dsptch	;give everything a chance to create its queues
+	mvi	c,dsptch	; give everything a chance to create its queues
 	call	bdos
 
 	mvi	c,sydatad

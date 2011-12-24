@@ -190,7 +190,7 @@ void options(int argc, char *argv[])
 		i++;
 	}
 	if (i == 0) {
-		printf("no input file given\n");
+		printf("no input file\n");
 		usage();
 	}
 }

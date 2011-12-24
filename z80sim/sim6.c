@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
@@ -20,6 +20,7 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 /*
@@ -304,7 +305,7 @@ int op_ddcb_handel(void)
 	register int d;
 	register int t;
 
-	d = (char) *PC++;
+	d = (signed char) *PC++;
 
 #ifdef WANT_PCC
 		if (PC > ram + 65535)	/* correct PC overrun */

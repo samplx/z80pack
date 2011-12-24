@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * With this configuration the simulated Z80 runs with the
  * highest possible speed
@@ -23,12 +23,14 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 /*
  *	The following defines may be activated, commented or modified
  *	by user for her/his own purpose.
  */
+/*#define Z80_UNDOC*/	/* compile undocumented Z80 instructions */
 /*#define WANT_INT*/	/* activate CPU's interrupts */
 /*#define WANT_SPC*/	/* activate SP over-/underrun handling 0000<->FFFF */
 /*#define WANT_PCC*/	/* activate PC overrun handling FFFF->0000 */
@@ -53,8 +55,8 @@
 /*
  *	The following lines of this file should not be modified by user
  */
-#define	COPYR	"Copyright (C) 1987-2007 by Udo Munk"
-#define	RELEASE	"1.14"
+#define	COPYR	"Copyright (C) 1987-2008 by Udo Munk"
+#define	RELEASE	"1.15"
 
 #define	LENCMD		80		/* length of command buffers etc */
 

@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a Z80-CPU simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
@@ -20,6 +20,7 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 #include <unistd.h>
@@ -29,30 +30,20 @@
 #include "sim.h"
 #include "simglb.h"
 
+int boot(void);
+
+extern int load_file(char *);
+extern int load_core(void);
 extern void cpu(void);
 
 struct termios old_term, new_term;
 
 /*
- *	This function gets the CP/M boot sector from first track/sector
- *	of disk drive A (file drivea.cpm) into memory started at 0.
- *	Then the Z80 CPU emulation is started and the system should boot.
+ *	This function initializes the terminal, loads boot code
+ *	and then the Z80 CPU emulation is started.
  */
 void mon(void)
 {
-	register int fd;
-
-	if (!l_flag) {
-		if ((fd = open("disks/drivea.cpm", O_RDONLY)) == -1) {
-			perror("file disks/drivea.cpm");
-			return;
-		}
-		if (read(fd, (char *) ram, 128) != 128) {
-			perror("file disks/drivea.cpm");
-			return;
-		}
-		close(fd);
-	}
 
 	tcgetattr(0, &old_term);
 	new_term = old_term;
@@ -65,9 +56,11 @@ void mon(void)
 #endif
 	tcsetattr(0, TCSADRAIN, &new_term);
 
-	cpu_state = CONTIN_RUN;
-	cpu_error = NONE;
-	cpu();
+	if (!boot()) {
+		cpu_state = CONTIN_RUN;
+		cpu_error = NONE;
+		cpu();
+	}
 
 	tcsetattr(0, TCSADRAIN, &old_term);
 
@@ -98,10 +91,44 @@ void mon(void)
 		       *(PC - 2), *(PC - 1));
 		break;
 	case USERINT:
-		puts("\nUser Interrupt");
+		printf("\nUser Interrupt at %04x\n", (unsigned int)(PC - ram));
 		break;
 	default:
 		printf("\nUnknown error %d\n", cpu_error);
 		break;
 	}
+}
+
+/*
+ *	Load boot code from a saved core image, a boot file or from
+ *	first sector of disk drive A:
+ */
+int boot(void)
+{
+	register int fd;
+
+	puts("\nBooting...\n");
+
+	if (l_flag) {
+		return(load_core());
+	}
+
+	if (x_flag) {
+		return(load_file(xfn));
+	}
+
+	if ((fd = open("disks/drivea.cpm", O_RDONLY)) == -1) {
+		perror("file disks/drivea.cpm");
+		puts("\n");
+		close(fd);
+		return(1);
+	}
+	if (read(fd, (char *) ram, 128) != 128) {
+		perror("file disks/drivea.cpm");
+		puts("\n");
+		close(fd);
+		return(1);
+	}
+	close(fd);
+	return(0);
 }

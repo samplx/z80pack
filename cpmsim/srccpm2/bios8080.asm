@@ -41,7 +41,7 @@ WBOOTE: JMP	WBOOT		;warm start
 	JMP	CONOUT		;console character out
 	JMP	LIST		;list character out
 	JMP	PUNCH		;punch character out
-	JMP	READER		;reader character out
+	JMP	READER		;reader character in
 	JMP	HOME		;move head to home position
 	JMP	SELDSK		;select disk
 	JMP	SETTRK		;set track number

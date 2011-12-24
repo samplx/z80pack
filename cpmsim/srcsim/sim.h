@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a Z80-CPU simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
@@ -20,31 +20,40 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 /*
  *	The following defines may be activated, commented or modified
  *	by user for her/his own purpose.
  */
+#define Z80_UNDOC	/* compile undocumented Z80 instructions */
 #define WANT_INT	/* interrupt for MP/M */
-/*#define WANT_SPC*/	/* faster and normaly not used with CP/M */
-/*#define WANT_PCC*/	/* faster and normaly not used with CP/M */
+/*#define WANT_SPC*/	/* faster and normaly not needed with CP/M */
+/*#define WANT_PCC*/	/* faster and normaly not needed with CP/M */
 /*#define CNTL_C*/	/* don't abort simulation with cntl-c */
 #define CNTL_BS		/* emergency exit with cntl-\ :-) */
 /*#define CNTL_Z*/	/* don't suspend simulation with cntl-z */
 #define WANT_TIM	/* run length measurement needed to adjust CPU speed */
 /*#define HISIZE  1000*//* no history */
 /*#define SBSIZE  10*/	/* no breakpoints */
+#define PIPES		/* use named pipes for auxiliary device */
 #define NETWORKING	/* TCP/IP networked serial ports */
 #define NUMSOC	4	/* number of server sockets */
+#define TCPASYNC	/* tcp/ip server can use async I/O */
 /*#define CNETDEBUG*/	/* client network protocol debugger */
 /*#define SNETDEBUG*/	/* server network protocol debugger */
+
+#ifdef __CYGWIN__
+#undef PIPES		/* forking and pipes not working correct */
+#undef TCPASYNC		/* SIGIO on BSD sockets not working */
+#endif
 
 /*
  *	The following lines of this file should not be modified by user
  */
-#define COPYR	"Copyright (C) 1987-2007 by Udo Munk"
-#define RELEASE	"1.14"
+#define COPYR	"Copyright (C) 1987-2008 by Udo Munk"
+#define RELEASE	"1.15"
 
 #define LENCMD		80		/* length of command buffers etc */
 

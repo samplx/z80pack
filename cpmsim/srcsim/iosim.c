@@ -1,16 +1,16 @@
 /*
  * Z80SIM  -  a Z80-CPU simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * This modul contains a complex I/O-simulation for running
- * CP/M 2, CP/M 3, MP/M...
+ * CP/M 1, CP/M 2, CP/M 3, MP/M...
  * Please note this doesn't emulate any hardware which
  * ever existed, we've got all virtual circuits in here!
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
- * 19-MAY-89 Additions for CP/M 3.0 und MP/M
+ * 19-MAY-89 Additions for CP/M 3.0 and MP/M
  * 23-DEC-90 Ported to COHERENT 3.0
  * 10-JUN-92 Some optimization done
  * 25-JUN-92 Flush output of stdout only at every OUT to port 0
@@ -23,6 +23,15 @@
  * 25-DEC-06 CPU speed option and 100 ticks interrupt
  * 19-FEB-07 improved networking
  * 22-JUL-07 added second FDC sector port for implementing large harddisks
+ * 30-OCT-07 printer port returns EOF on input
+ * 03-SEP-07 improved the clock chip for support of other OS's
+ * 19-SEP-07 delay circuit modified to delay x * 10ms
+ * 05-DEC-07 fixed socket shutdown issues for NetBSD
+ * 06-DEC-07 added hardware control port to reset I/O, CPU and reboot and such
+ * 07-DEC-07 conditional compile pipes for aux device, problems with Cygwin
+ * 17-DEC-07 conditional compile async TCP/IP server, problems with Cygwin
+ * 03-FEB-08 added hardware control port to reset CPU, MMU and abort sim
+ * 07-APR-08 added port to set/get CPU speed
  */
 
 /*
@@ -58,7 +67,10 @@
  *	25 - clock command
  *	26 - clock data
  *	27 - 10ms timer causing IM 1 INT
- *	28 - 10ms delay circuit
+ *	28 - x * 10ms delay circuit for busy waiting loops
+ *	29 - hardware control
+ *	30 - CPU speed low
+ *	31 - CPU speed high
  *
  *	40 - passive socket #1 status
  *	41 - passive socket #1 data
@@ -92,6 +104,8 @@
 #include "sim.h"
 #include "simglb.h"
 
+extern int boot(void);
+
 /*
  *	Structure to describe an emulated disk drive:
  *		pointer to filename
@@ -113,6 +127,7 @@ static BYTE status;		/* status of last I/O operation on FDC */
 static BYTE dmadl;		/* current DMA address destination low */
 static BYTE dmadh;		/* current DMA address destination high */
 static BYTE clkcmd;		/* clock command */
+static BYTE clkfmt;		/* clock format, 0 = BCD, 1 = decimal */
 static BYTE timer;		/* 10ms timer */
 static int drivea;		/* fd for file "drivea.cpm" */
 static int driveb;		/* fd for file "driveb.cpm" */
@@ -131,17 +146,27 @@ static int driven;		/* fd for file "driven.cpm" */
 static int driveo;		/* fd for file "driveo.cpm" */
 static int drivep;		/* fd for file "drivep.cpm" */
 static int printer;		/* fd for file "printer.cpm" */
+static char last_char;		/* buffer for 1 character (console status) */
+static int speed;		/* to reset CPU speed */
+
+#ifdef PIPES
 static int auxin;		/* fd for pipe "auxin" */
 static int auxout;		/* fd for pipe "auxout" */
 static int aux_in_eof;		/* status of pipe "auxin" (<>0 means EOF) */
 static int pid_rec;		/* PID of the receiving process for auxiliary */
-static char last_char;		/* buffer for 1 character (console status) */
+#else
+static int aux_in;		/* fd for file "auxiliaryin.cpm" */
+static int aux_in_lf;		/* linefeed flag for aux_in */
+static int aux_out;		/* fd for file "auxiliaryout.cpm" */
+#endif
 
 #ifdef NETWORKING
 static int ss[NUMSOC];		/* server socket descriptors */
+static int ssc[NUMSOC];		/* connected server socket descriptors */
 static int ss_port[NUMSOC];	/* TCP/IP port for server sockets */
 static int ss_telnet[NUMSOC];	/* telnet protocol flag for server sockets */
-static int ssc[NUMSOC];		/* connected server socket descriptors */
+static char char_mode[3] = {255, 251, 3}; /* telnet negotiation */
+static char will_echo[3] = {255, 251, 1}; /* telnet negotiation */
 static int cs;			/* client socket #1 descriptor */
 static int cs_port;		/* TCP/IP port for cs */
 static char cs_host[256];	/* hostname for cs */
@@ -220,6 +245,9 @@ static BYTE mmuc_in(void), mmuc_out(BYTE);
 static BYTE clkc_in(void), clkc_out(BYTE), clkd_in(void), clkd_out(BYTE);
 static BYTE time_in(void), time_out(BYTE);
 static BYTE delay_in(void), delay_out(BYTE);
+static BYTE hwctl_in(void), hwctl_out(BYTE);
+static BYTE speedl_in(void), speedl_out(BYTE);
+static BYTE speedh_in(void), speedh_out(BYTE);
 static BYTE cond1_in(void), cond1_out(BYTE), cons1_in(void), cons1_out(BYTE);
 static BYTE cond2_in(void), cond2_out(BYTE), cons2_in(void), cons2_out(BYTE);
 static BYTE cond3_in(void), cond3_out(BYTE), cons3_in(void), cons3_out(BYTE);
@@ -232,7 +260,9 @@ static int to_bcd(int), get_date(struct tm *);
 #ifdef NETWORKING
 static void net_server_config(void), net_client_config(void);
 static void init_server_socket(int);
+#ifdef TCPASYNC
 static void int_io(int);
+#endif
 #endif
 
 /*
@@ -269,9 +299,9 @@ static BYTE (*port[256][2]) () = {
 	{ clkd_in, clkd_out },		/* port 26 */
 	{ time_in, time_out },		/* port 27 */
 	{ delay_in, delay_out  },	/* port 28 */
-	{ io_trap, io_trap  },		/* port 29 */
-	{ io_trap, io_trap  },		/* port 30 */
-	{ io_trap, io_trap  },		/* port 31 */
+	{ hwctl_in, hwctl_out  },	/* port 29 */
+	{ speedl_in, speedl_out  },	/* port 30 */
+	{ speedh_in, speedh_out  },	/* port 31 */
 	{ io_trap, io_trap  },		/* port 32 */
 	{ io_trap, io_trap  },		/* port 33 */
 	{ io_trap, io_trap  },		/* port 34 */
@@ -301,9 +331,8 @@ static BYTE (*port[256][2]) () = {
  *	This function initializes the I/O handlers:
  *	1. Initialize all unused ports with the I/O trap handler.
  *	2. Initialize the MMU with NULL pointers and defaults.
- *	3. Open the files which emulates the disk drives. The file
- *	   for drive A must be opened, or CP/M can't be booted.
- *	   Errors for opening one of the other 15 drives results
+ *	3. Open the files which emulates the disk drives.
+ *	   Errors for opening one of the drives results
  *	   in a NULL pointer for fd in the dskdef structure,
  *	   so that this drive can't be used.
  *	4. Create and open the file "printer.cpm" for emulation
@@ -316,7 +345,7 @@ static BYTE (*port[256][2]) () = {
 void init_io(void)
 {
 	register int i;
-#ifdef NETWORKING
+#if defined(NETWORKING) && defined(TCPASYNC)
 	static struct sigaction newact;
 #endif
 
@@ -330,11 +359,7 @@ void init_io(void)
 	selbnk = 0;
 	segsize = SEGSIZ;
 
-	if ((*disks[0].fd = open(disks[0].fn, O_RDWR)) == -1) {
-		perror("file disks/drivea.cpm");
-		exit(1);
-	}
-	for (i = 1; i <= 15; i++)
+	for (i = 0; i <= 15; i++)
 		if ((*disks[i].fd = open(disks[i].fn, O_RDWR)) == -1)
 			disks[i].fd = NULL;
 
@@ -343,13 +368,15 @@ void init_io(void)
 		exit(1);
 	}
 
+#ifdef PIPES
 	pid_rec = fork();
 	switch (pid_rec) {
 	case -1:
 		puts("can't fork");
 		exit(1);
 	case 0:
-		execlp("./receive", "receive", "auxiliary.cpm", (char *) NULL);
+		execlp("./receive", "receive", "auxiliaryout.cpm",
+		       (char *) NULL);
 		puts("can't exec receive process");
 		exit(1);
 	}
@@ -361,13 +388,18 @@ void init_io(void)
 		perror("pipe auxout");
 		exit(1);
 	}
+#endif
 
 #ifdef NETWORKING
 	net_server_config();
 	net_client_config();
 
+#ifdef TCPASYNC
 	newact.sa_handler = int_io;
+	bzero((char *)&newact.sa_mask, sizeof(newact.sa_mask));
+	newact.sa_flags = 0;
 	sigaction(SIGIO, &newact, NULL);
+#endif
 
 	for (i = 0; i < NUMSOC; i++)
 		init_server_socket(i);
@@ -382,7 +414,9 @@ static void init_server_socket(int n)
 {
 	struct sockaddr_in sin;
 	int on = 1;
+#ifdef TCPASYNC
 	int i;
+#endif
 
 	if (ss_port[n] == 0)
 		return;
@@ -395,12 +429,14 @@ static void init_server_socket(int n)
 		perror("server socket options");
 		exit(1);
 	}
+#ifdef TCPASYNC
 	fcntl(ss[n], F_SETOWN, getpid());
 	i = fcntl(ss[n], F_GETFL, 0);
 	if (fcntl(ss[n], F_SETFL, i | FASYNC) == -1) {
 		perror("fcntl FASYNC server socket");
 		exit(1);
 	}
+#endif
 	bzero((char *)&sin, sizeof(sin));
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = INADDR_ANY;
@@ -450,7 +486,6 @@ static void net_server_config(void)
 			       ((ss_telnet[i - 1] > 0) ? "on" : "off"));
 		}
 		fclose(fp);
-		printf("\n");
 	}
 }
 
@@ -484,7 +519,6 @@ static void net_client_config(void)
 			       cs_port);
 		}
 		fclose(fp);
-		printf("\n");
 	}
 }
 #endif
@@ -495,7 +529,7 @@ static void net_client_config(void)
  *	1. The files emulating the disk drives are closed.
  *	2. The file "printer.com" emulating a printer is closed.
  *	3. The named pipes "auxin" and "auxout" are closed.
- *	4. All sockets are closed
+ *	4. All connected sockets are closed
  *	5. The receiving process for the aux serial port is stopped.
  */
 void exit_io(void)
@@ -506,19 +540,46 @@ void exit_io(void)
 		if (disks[i].fd != NULL)
 			close(*disks[i].fd);
 	close(printer);
+
+#ifdef PIPES
 	close(auxin);
 	close(auxout);
+	kill(pid_rec, SIGHUP);
+#endif
+
 #ifdef NETWORKING
-	for (i = 0; i < NUMSOC; i++)
-		if (ss[i])
-			close(ss[i]);
 	for (i = 0; i < NUMSOC; i++)
 		if (ssc[i])
 			close(ssc[i]);
 	if (cs)
 		close(cs);
 #endif
-	kill(pid_rec, SIGHUP);
+}
+
+/*
+ *	reset the CPU and I/O system
+ */
+void reset_system(void)
+{
+	register int i;
+
+	/* reset hardware */
+	time_out(0);			/* stop timer */
+	for (i = 0; i < MAXSEG; i++) {	/* reset MMU */
+		if (mmu[i] != NULL) {
+			free(mmu[i]);
+			mmu[i] = NULL;
+		}
+	}
+	selbnk = 0;
+	segsize = SEGSIZ;
+
+	/* reset CPU */
+	IFF = 0;			/* disable interrupts */
+	wrk_ram	= PC = STACK = ram;	/* PC & SP = 0 */
+
+	/* reboot */
+	boot();
 }
 
 /*
@@ -587,9 +648,45 @@ static BYTE cons_in(void)
  */
 static BYTE cons1_in(void)
 {
-	register BYTE status = 0;
+	BYTE status = 0;
 #ifdef NETWORKING
 	struct pollfd p[1];
+
+#ifndef TCPASYNC
+	socklen_t alen;
+	struct sockaddr_in fsin;
+	int go_away;
+
+	p[0].fd = ss[0];
+	p[0].events = POLLIN;
+	p[0].revents = 0;
+	poll(p, 1, 0);
+
+	if (p[0].revents) {
+
+		alen = sizeof(fsin);
+
+		if (ssc[0] != 0) {
+			go_away = accept(ss[0],
+					 (struct sockaddr *)&fsin, &alen);
+			close(go_away);
+			goto ss0_done;
+		}
+
+		if ((ssc[0] = accept(ss[0], (struct sockaddr *)&fsin,
+		    &alen)) == -1) {
+			perror("accept server socket");
+			ssc[0] = 0;
+		}
+
+		if (ss_telnet[0]) {
+			write(ssc[0], &char_mode, 3);
+			write(ssc[0], &will_echo, 3);
+		}
+
+	}
+ss0_done:
+#endif
 
 	if (ssc[0] != 0) {
 		p[0].fd = ssc[0];
@@ -617,9 +714,45 @@ static BYTE cons1_in(void)
  */
 static BYTE cons2_in(void)
 {
-	register BYTE status = 0;
+	BYTE status = 0;
 #ifdef NETWORKING
 	struct pollfd p[1];
+
+#ifndef TCPASYNC
+	socklen_t alen;
+	struct sockaddr_in fsin;
+	int go_away;
+
+	p[0].fd = ss[1];
+	p[0].events = POLLIN;
+	p[0].revents = 0;
+	poll(p, 1, 0);
+
+	if (p[0].revents) {
+
+		alen = sizeof(fsin);
+
+		if (ssc[1] != 0) {
+			go_away = accept(ss[1],
+					 (struct sockaddr *)&fsin, &alen);
+			close(go_away);
+			goto ss1_done;
+		}
+
+		if ((ssc[1] = accept(ss[1], (struct sockaddr *)&fsin,
+		    &alen)) == -1) {
+			perror("accept server socket");
+			ssc[1] = 0;
+		}
+
+		if (ss_telnet[1]) {
+			write(ssc[1], &char_mode, 3);
+			write(ssc[1], &will_echo, 3);
+		}
+
+	}
+ss1_done:
+#endif
 
 	if (ssc[1] != 0) {
 		p[0].fd = ssc[1];
@@ -647,9 +780,45 @@ static BYTE cons2_in(void)
  */
 static BYTE cons3_in(void)
 {
-	register BYTE status = 0;
+	BYTE status = 0;
 #ifdef NETWORKING
 	struct pollfd p[1];
+
+#ifndef TCPASYNC
+	socklen_t alen;
+	struct sockaddr_in fsin;
+	int go_away;
+
+	p[0].fd = ss[2];
+	p[0].events = POLLIN;
+	p[0].revents = 0;
+	poll(p, 1, 0);
+
+	if (p[0].revents) {
+
+		alen = sizeof(fsin);
+
+		if (ssc[2] != 0) {
+			go_away = accept(ss[2],
+					 (struct sockaddr *)&fsin, &alen);
+			close(go_away);
+			goto ss2_done;
+		}
+
+		if ((ssc[2] = accept(ss[2], (struct sockaddr *)&fsin,
+		    &alen)) == -1) {
+			perror("accept server socket");
+			ssc[2] = 0;
+		}
+
+		if (ss_telnet[2]) {
+			write(ssc[2], &char_mode, 3);
+			write(ssc[2], &will_echo, 3);
+		}
+
+	}
+ss2_done:
+#endif
 
 	if (ssc[2] != 0) {
 		p[0].fd = ssc[2];
@@ -677,9 +846,45 @@ static BYTE cons3_in(void)
  */
 static BYTE cons4_in(void)
 {
-	register BYTE status = 0;
+	BYTE status = 0;
 #ifdef NETWORKING
 	struct pollfd p[1];
+
+#ifndef TCPASYNC
+	socklen_t alen;
+	struct sockaddr_in fsin;
+	int go_away;
+
+	p[0].fd = ss[3];
+	p[0].events = POLLIN;
+	p[0].revents = 0;
+	poll(p, 1, 0);
+
+	if (p[0].revents) {
+
+		alen = sizeof(fsin);
+
+		if (ssc[3] != 0) {
+			go_away = accept(ss[3],
+					 (struct sockaddr *)&fsin, &alen);
+			close(go_away);
+			goto ss3_done;
+		}
+
+		if ((ssc[3] = accept(ss[3], (struct sockaddr *)&fsin,
+		    &alen)) == -1) {
+			perror("accept server socket");
+			ssc[3] = 0;
+		}
+
+		if (ss_telnet[3]) {
+			write(ssc[3], &char_mode, 3);
+			write(ssc[3], &will_echo, 3);
+		}
+
+	}
+ss3_done:
+#endif
 
 	if (ssc[3] != 0) {
 		p[0].fd = ssc[3];
@@ -707,7 +912,7 @@ static BYTE cons4_in(void)
  */
 static BYTE nets1_in(void)
 {
-	register BYTE status = 0;
+	BYTE status = 0;
 #ifdef NETWORKING
 	struct sockaddr_in sin;
 	struct hostent *host;
@@ -741,7 +946,7 @@ static BYTE nets1_in(void)
 		if (p[0].revents & POLLHUP) {
 			close(cs);
 			cs = 0;
-			return(0);
+			return((BYTE) 0);
 		}
 		if (p[0].revents & POLLIN)
 			status |= 1;
@@ -1201,11 +1406,11 @@ static BYTE prts_out(BYTE data)
 
 /*
  *	I/O handler for read printer data:
- *	always read a 0 from the printer
+ *	always read an EOF from the printer
  */
 static BYTE prtd_in(void)
 {
-	return((BYTE) 0);
+	return((BYTE) 0x1a);	/* CP/M EOF */
 }
 
 /*
@@ -1235,7 +1440,11 @@ again:
  */
 static BYTE auxs_in(void)
 {
+#ifdef PIPES
 	return((BYTE) aux_in_eof);
+#else
+	return((BYTE) 0xff);
+#endif
 }
 
 /*
@@ -1244,34 +1453,92 @@ static BYTE auxs_in(void)
  */
 static BYTE auxs_out(BYTE data)
 {
+#ifdef PIPES
 	aux_in_eof = data;
+#endif
 	return((BYTE) 0);
 }
 
 /*
  *	I/O handler for read aux data:
- *	read next byte from pipe "auxin"
+ *	read next byte from pipe "auxin" or from file "auxiliaryin.cpm"
  */
 static BYTE auxd_in(void)
 {
 	char c;
 
+#ifdef PIPES
 	if (read(auxin, &c, 1) == 1)
 		return((BYTE) c);
 	else {
 		aux_in_eof = 0xff;
 		return((BYTE) 0x1a);	/* CP/M EOF */
 	}
+#else
+	if (aux_in == 0) {
+		if ((aux_in = open("auxiliaryin.cpm", O_RDONLY)) == -1){
+			perror("open auxiliaryin.cpm");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
+		}
+	}
+
+	if (aux_in_lf) {
+		aux_in_lf = 0;
+		return((BYTE) '\n');
+	}
+
+	if (read(aux_in, &c, 1) != 1) {
+		close(aux_in);
+		aux_in = 0;
+		return((BYTE) 0x1a);
+	}
+
+	if (c == '\n') {
+		aux_in_lf = 1;
+		return((BYTE) '\r');
+	}
+
+	return((BYTE) c);
+#endif
 }
 
 /*
  *	I/O handler for write aux data:
- *	write output to pipe "auxout"
+ *	write output to pipe "auxout" or to file "auxiliaryout.cpm"
  */
 static BYTE auxd_out(BYTE data)
 {
+#ifdef PIPES
+	if ((data == 0) || (data == 0x1a))
+		return((BYTE) 0);
+
 	if (data != '\r')
 		write(auxout, (char *) &data, 1);
+#else
+	if (data == 0)
+		return((BYTE) 0);
+
+	if (aux_out == 0) {
+		if ((aux_out = creat("auxiliaryout.cpm", 0644)) == -1) {
+			perror("open auxiliaryout.cpm");
+			cpu_error = IOERROR;
+			cpu_state = STOPPED;
+			return((BYTE) 0);
+		}
+	}
+
+	if (data == 0x1a) {
+		close(aux_out);
+		aux_out = 0;
+		return((BYTE) 0);
+	}
+
+	if (data != '\r')
+		write(aux_out, (char *) &data, 1);
+#endif
+
 	return((BYTE) 0);
 }
 
@@ -1528,12 +1795,12 @@ static BYTE mmus_in(void)
  */
 static BYTE mmus_out(BYTE data)
 {
+	if (data == selbnk)
+		return((BYTE) 0);
 	if (data > maxbnk) {
 		printf("Try to select unallocated bank %d\n", data);
 		exit(1);
 	}
-	if (data == selbnk)
-		return((BYTE) 0);
 	//printf("SIM: memory select bank %d from %d\n", data, PC-ram);
 	memcpy(mmu[selbnk], (char *) ram, segsize);
 	memcpy((char *) ram, mmu[data], segsize);
@@ -1577,22 +1844,28 @@ static BYTE clkc_in(void)
 /*
  *	I/O handler for write clock command:
  *	set the wanted clock command
+ *	toggle BCD/decimal format if toggle command (255)
  */
 static BYTE clkc_out(BYTE data)
 {
 	clkcmd = data;
+	if (data == 255)
+		clkfmt = clkfmt ^ 1;
 	return((BYTE) 0);
 }
 
 /*
  *	I/O handler for read clock data:
- *	dependent from the last clock command the following
+ *	dependent on the last clock command the following
  *	informations are returned from the system clock:
- *		0 - seconds in BCD
- *		1 - minutes in BCD
- *		2 - hours in BCD
+ *		0 - seconds in BCD or decimal
+ *		1 - minutes in BCD or decimal
+ *		2 - hours in BCD or decimal
  *		3 - low byte number of days since 1.1.1978
  *		4 - high byte number of days since 1.1.1978
+ *		5 - day of month in BCD or decimal
+ *		6 - month in BCD or decimal
+ *		7 - year in BCD or decomal
  *	for every other clock command a 0 is returned
  */
 static BYTE clkd_in(void)
@@ -1604,20 +1877,47 @@ static BYTE clkd_in(void)
 	time(&Time);
 	t = localtime(&Time);
 	switch(clkcmd) {
-	case 0:			/* seconds in BCD */
-		val = to_bcd(t->tm_sec);
+	case 0:			/* seconds */
+		if (clkfmt)
+			val = t->tm_sec;
+		else
+			val = to_bcd(t->tm_sec);
 		break;
-	case 1:			/* minutes in BCD */
-		val = to_bcd(t->tm_min);
+	case 1:			/* minutes */
+		if (clkfmt)
+			val = t->tm_min;
+		else
+			val = to_bcd(t->tm_min);
 		break;
-	case 2:			/* hours in BCD */
-		val = to_bcd(t->tm_hour);
+	case 2:			/* hours */
+		if (clkfmt)
+			val = t->tm_hour;
+		else
+			val = to_bcd(t->tm_hour);
 		break;
 	case 3:			/* low byte days */
 		val = get_date(t) & 255;
 		break;
 	case 4:			/* high byte days */
 		val = get_date(t) >> 8;
+		break;
+	case 5:			/* day of month */
+		if (clkfmt)
+			val = t->tm_mday;
+		else
+			val = to_bcd(t->tm_mday);
+		break;
+	case 6:			/* month */
+		if (clkfmt)
+			val = t->tm_mon;
+		else
+			val = to_bcd(t->tm_mon);
+		break;
+	case 7:			/* year */
+		if (clkfmt)
+			val = t->tm_year;
+		else
+			val = to_bcd(t->tm_year);
 		break;
 	default:
 		val = 0;
@@ -1712,14 +2012,14 @@ static BYTE time_in(void)
 
 /*
  *	I/O handler for write delay
- *	delay CPU for 10ms
+ *	delay CPU for data * 10ms
  */
 static BYTE delay_out(BYTE data)
 {
 	struct timespec timer;
 
 	timer.tv_sec = 0;
-	timer.tv_nsec = 10000000;
+	timer.tv_nsec = (long) (10000000L * data);
 	nanosleep(&timer, NULL);
 
 #ifdef CNETDEBUG
@@ -1739,6 +2039,72 @@ static BYTE delay_in(void)
 }
 
 /*
+ *	I/O handler for write hardware control:
+ *	bit 0 = 1	reset CPU, MMU and reboot
+ *	bit 7 = 1	abort emulation with I/O trap
+ */
+static BYTE hwctl_out(BYTE data)
+{
+	if (data & 128) {
+		cpu_error = IOTRAP;
+		cpu_state = STOPPED;
+		return((BYTE) 0);
+	}
+
+	if (data & 1) {
+		reset_system();
+		return((BYTE) 0);
+	}
+
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read hardware control
+ *	returns 0
+ */
+static BYTE hwctl_in(void)
+{
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write CPU speed low
+ */
+static BYTE speedl_out(BYTE data)
+{
+	speed = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read CPU speed low
+ */
+static BYTE speedl_in(void)
+{
+	return(f_flag & 0xff);
+}
+
+/*
+ *	I/O handler for write CPU speed high
+ */
+static BYTE speedh_out(BYTE data)
+{
+	speed += data << 8;
+	tmax = speed * 10000;
+	f_flag = speed;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read CPU speed high
+ */
+static BYTE speedh_in(void)
+{
+	return(f_flag  >> 8);
+}
+
+/*
  *	timer interrupt causes maskerable CPU interrupt
  */
 static void int_timer(int sig)
@@ -1746,7 +2112,7 @@ static void int_timer(int sig)
 	int_type = INT_INT;
 }
 
-#ifdef NETWORKING
+#if defined(NETWORKING) && defined(TCPASYNC)
 /*
  *	SIGIO interrupt handler
  */
@@ -1754,15 +2120,13 @@ static void int_io(int sig)
 {
 	register int i;
 	struct sockaddr_in fsin;
+	socklen_t alen;
 	struct pollfd p[NUMSOC];
-	int alen;
 	int go_away;
-	char char_mode[3] = {255, 251, 3};
-	char will_echo[3] = {255, 251, 1};
 
 	for (i = 0; i < NUMSOC; i++) {
 		p[i].fd = ss[i];
-		p[i].events = POLLIN | POLLOUT;
+		p[i].events = POLLIN;
 		p[i].revents = 0;
 	}
 

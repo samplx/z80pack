@@ -35,7 +35,7 @@ ERRMSG:	DEFM	'BOOT: error booting'
 COLD:	LD	BC,2		;b=track 0, c=sector 2
 	LD	D,SECTS		;d=# sectors to load
 	LD	HL,CCP		;base transfer address
-	LD	A,0		;select drive A
+	XOR	A		;select drive A
 	OUT	(DRIVE),A
 ;
 ;	load the next sector

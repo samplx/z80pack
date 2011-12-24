@@ -3,4 +3,4 @@
 rm -f disks/drive[ab].cpm
 ln disks/library/cpm3-1.dsk disks/drivea.cpm
 ln disks/library/cpm3-2.dsk disks/driveb.cpm
-cpmsim
+./cpmsim

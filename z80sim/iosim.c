@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * This modul of the simulator contains a simple terminal I/O
  * simulation as an example.
@@ -23,13 +23,14 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 /*
  *	Sample I/O-handler
  *
- *	Port 0 input:	reads the next byte from stdin
- *	Port 0 output:	writes the byte to stdout
+ *	Port 1 input:	reads the next byte from stdin
+ *	Port 1 output:	writes the byte to stdout
  *
  *	All the other ports are connected to an I/O-trap handler,
  *	I/O to this ports stops the simulation with an I/O error.
@@ -44,8 +45,8 @@
  *	for all port addresses.
  */
 static BYTE io_trap(void);
-static BYTE p000_in(void);
-static void p000_out(BYTE);
+static BYTE p001_in(void);
+static void p001_out(BYTE);
 
 /*
  *	This two dimensional array contains function pointers
@@ -53,7 +54,8 @@ static void p000_out(BYTE);
  *	The first entry is for input, the second for output.
  */
 static BYTE (*port[256][2]) () = {
-	{ p000_in, p000_out }		/* port	0 */
+	{ io_trap, io_trap },		/* port 0 */
+	{ p001_in, p001_out }		/* port	1 */
 };
 
 /*
@@ -72,7 +74,7 @@ void init_io(void)
 {
 	register int i;
 
-	for (i = 1; i <= 255; i++)
+	for (i = 2; i <= 255; i++)
 		port[i][0] = port[i][1]	= io_trap;
 }
 
@@ -123,19 +125,19 @@ static BYTE io_trap(void)
 }
 
 /*
- *	I/O function port 0 read:
+ *	I/O function port 1 read:
  *	Read next byte from stdin.
  */
-static BYTE p000_in(void)
+static BYTE p001_in(void)
 {
 	return((BYTE) getchar());
 }
 
 /*
- *	I/O function port 0 write:
+ *	I/O function port 1 write:
  *	Write byte to stdout and flush the output.
  */
-static void p000_out(BYTE data)
+static void p001_out(BYTE data)
 {
 	putchar((int) data);
 	fflush(stdout);

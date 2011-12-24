@@ -171,7 +171,7 @@ DIG2:
 	RET
 
 OUTCHAR:			; Zeichen auf Console ausgeben
-	OUT	(0),A
+	OUT	(1),A
 	RET
 
 ; **********************************

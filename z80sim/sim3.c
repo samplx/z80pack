@@ -1,7 +1,7 @@
 /*
  * Z80SIM  -  a	Z80-CPU	simulator
  *
- * Copyright (C) 1987-2007 by Udo Munk
+ * Copyright (C) 1987-2008 by Udo Munk
  *
  * History:
  * 28-SEP-87 Development on TARGON/35 with AT&T Unix System V.3
@@ -20,6 +20,7 @@
  * 25-DEC-06 Release 1.12 CPU speed option
  * 19-FEB-07 Release 1.13 various improvements
  * 06-OCT-07 Release 1.14 bug fixes and improvements
+ * 06-AUG-08 Release 1.15 many improvements and Windows support via Cygwin
  */
 
 /*
@@ -39,15 +40,20 @@ static int op_ldixnn(void), op_ldixinn(void), op_ldinx(void);
 static int op_adaxd(void), op_acaxd(void), op_suaxd(void), op_scaxd(void);
 static int op_andxd(void), op_xorxd(void), op_orxd(void), op_cpxd(void);
 static int op_decxd(void), op_incxd(void);
-static int op_addxb(void), op_addxd(void), op_addxs(void), op_addxx();
+static int op_addxb(void), op_addxd(void), op_addxs(void), op_addxx(void);
 static int op_incix(void), op_decix(void);
 static int op_ldaxd(void), op_ldbxd(void), op_ldcxd(void);
-static int op_lddxd(), op_ldexd(void);
+static int op_lddxd(void), op_ldexd(void);
 static int op_ldhxd(void), op_ldlxd(void);
 static int op_ldxda(void), op_ldxdb(void), op_ldxdc(void);
-static int op_ldxdd(), op_ldxde(void);
+static int op_ldxdd(void), op_ldxde(void);
 static int op_ldxdh(void), op_ldxdl(void), op_ldxdn(void);
 extern int op_ddcb_handel(void);
+
+#ifdef Z80_UNDOC
+static int op_undoc_ldixl(void);
+static int op_undoc_cpixl(void);
+#endif
 
 long op_dd_handel(void)
 {
@@ -165,7 +171,11 @@ long op_dd_handel(void)
 		trap_dd,			/* 0x6c	*/
 		trap_dd,			/* 0x6d	*/
 		op_ldlxd,			/* 0x6e	*/
+#ifndef Z80_UNDOC
 		trap_dd,			/* 0x6f	*/
+#else
+		op_undoc_ldixl,
+#endif
 		op_ldxdb,			/* 0x70	*/
 		op_ldxdc,			/* 0x71	*/
 		op_ldxdd,			/* 0x72	*/
@@ -243,7 +253,11 @@ long op_dd_handel(void)
 		trap_dd,			/* 0xba	*/
 		trap_dd,			/* 0xbb	*/
 		trap_dd,			/* 0xbc	*/
+#ifndef Z80_UNDOC
 		trap_dd,			/* 0xbd	*/
+#else
+		op_undoc_cpixl,
+#endif
 		op_cpxd,			/* 0xbe	*/
 		trap_dd,			/* 0xbf	*/
 		trap_dd,			/* 0xc0	*/
@@ -425,10 +439,10 @@ static int op_adaxd(void)		/* ADD A,(IX+d) */
 	register int i;
 	register BYTE P;
 
-	P = *(ram + IX + (char)	*PC++);
+	P = *(ram + IX + (signed char)	*PC++);
 	((A & 0xf) + (P	& 0xf) > 0xf) ?	(F |= H_FLAG) :	(F &= ~H_FLAG);
 	(A + P > 255) ?	(F |= C_FLAG) :	(F &= ~C_FLAG);
-	A = i =	(char) A + (char) P;
+	A = i =	(signed char) A + (signed char) P;
 	(i < -128 || i > 127) ?	(F |= P_FLAG) :	(F &= ~P_FLAG);
 	(i & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
@@ -442,10 +456,10 @@ static int op_acaxd(void)		/* ADC A,(IX+d) */
 	register BYTE P;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	P = *(ram + IX + (char)	*PC++);
+	P = *(ram + IX + (signed char)	*PC++);
 	((A & 0xf) + (P	& 0xf) + carry > 0xf) ?	(F |= H_FLAG) :	(F &= ~H_FLAG);
 	(A + P + carry > 255) ?	(F |= C_FLAG) :	(F &= ~C_FLAG);
-	A = i =	(char) A + (char) P + carry;
+	A = i =	(signed char) A + (signed char) P + carry;
 	(i < -128 || i > 127) ?	(F |= P_FLAG) :	(F &= ~P_FLAG);
 	(i & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
@@ -458,10 +472,10 @@ static int op_suaxd(void)		/* SUB A,(IX+d) */
 	register int i;
 	register BYTE P;
 
-	P = *(ram + IX + (char)	*PC++);
+	P = *(ram + IX + (signed char)	*PC++);
 	((P & 0xf) > (A	& 0xf))	? (F |=	H_FLAG)	: (F &=	~H_FLAG);
 	(P > A)	? (F |=	C_FLAG)	: (F &=	~C_FLAG);
-	A = i =	(char) A - (char) P;
+	A = i =	(signed char) A - (signed char) P;
 	(i < -128 || i > 127) ?	(F |= P_FLAG) :	(F &= ~P_FLAG);
 	(i & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
@@ -475,10 +489,10 @@ static int op_scaxd(void)		/* SBC A,(IX+d) */
 	register BYTE P;
 
 	carry =	(F & C_FLAG) ? 1 : 0;
-	P = *(ram + IX + (char)	*PC++);
+	P = *(ram + IX + (signed char)	*PC++);
 	((P & 0xf) + carry > (A	& 0xf))	? (F |=	H_FLAG)	: (F &=	~H_FLAG);
 	(P + carry > A)	? (F |=	C_FLAG)	: (F &=	~C_FLAG);
-	A = i =	(char) A - (char) P - carry;
+	A = i =	(signed char) A - (signed char) P - carry;
 	(i < -128 || i > 127) ?	(F |= P_FLAG) :	(F &= ~P_FLAG);
 	(i & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
@@ -488,7 +502,7 @@ static int op_scaxd(void)		/* SBC A,(IX+d) */
 
 static int op_andxd(void)		/* AND (IX+d) */
 {
-	A &= *(ram + IX	+ (char) *PC++);
+	A &= *(ram + IX	+ (signed char) *PC++);
 	(A & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	F |= H_FLAG;
@@ -499,7 +513,7 @@ static int op_andxd(void)		/* AND (IX+d) */
 
 static int op_xorxd(void)		/* XOR (IX+d) */
 {
-	A ^= *(ram + IX	+ (char) *PC++);
+	A ^= *(ram + IX	+ (signed char) *PC++);
 	(A & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	(parrity[A]) ? (F &= ~P_FLAG) :	(F |= P_FLAG);
@@ -509,7 +523,7 @@ static int op_xorxd(void)		/* XOR (IX+d) */
 
 static int op_orxd(void)		/* OR (IX+d) */
 {
-	A |= *(ram + IX	+ (char) *PC++);
+	A |= *(ram + IX	+ (signed char) *PC++);
 	(A & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(A) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
 	(parrity[A]) ? (F &= ~P_FLAG) :	(F |= P_FLAG);
@@ -522,10 +536,10 @@ static int op_cpxd(void)		/* CP (IX+d) */
 	register int i;
 	register BYTE P;
 
-	P = *(ram + IX + (char)	*PC++);
+	P = *(ram + IX + (signed char)	*PC++);
 	((P & 0xf) > (A	& 0xf))	? (F |=	H_FLAG)	: (F &=	~H_FLAG);
 	(P > A)	? (F |=	C_FLAG)	: (F &=	~C_FLAG);
-	i = (char) A - (char) P;
+	i = (signed char) A - (signed char) P;
 	(i < -128 || i > 127) ?	(F |= P_FLAG) :	(F &= ~P_FLAG);
 	(i & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
 	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
@@ -537,7 +551,7 @@ static int op_incxd(void)		/* INC (IX+d) */
 {
 	register BYTE *p;
 
-	p = ram	+ IX + (char) *PC++;
+	p = ram	+ IX + (signed char) *PC++;
 	((*p & 0xf) + 1	> 0xf) ? (F |= H_FLAG) : (F &= ~H_FLAG);
 	(*p)++;
 	(*p == 128) ? (F |= P_FLAG) : (F &= ~P_FLAG);
@@ -551,7 +565,7 @@ static int op_decxd(void)		/* DEC (IX+d) */
 {
 	register BYTE *p;
 
-	p = ram	+ IX + (char) *PC++;
+	p = ram	+ IX + (signed char) *PC++;
 	(((*p - 1) & 0xf)	== 0xf)	? (F |=	H_FLAG)	: (F &=	~H_FLAG);
 	(*p)--;
 	(*p == 127) ? (F |= P_FLAG) : (F &= ~P_FLAG);
@@ -641,85 +655,85 @@ static int op_decix(void)		/* DEC IX */
 
 static int op_ldaxd(void)		/* LD A,(IX+d) */
 {
-	A = *(IX + (char) *PC++	+ ram);
+	A = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_ldbxd(void)		/* LD B,(IX+d) */
 {
-	B = *(IX + (char) *PC++	+ ram);
+	B = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_ldcxd(void)		/* LD C,(IX+d) */
 {
-	C = *(IX + (char) *PC++	+ ram);
+	C = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_lddxd(void)		/* LD D,(IX+d) */
 {
-	D = *(IX + (char) *PC++	+ ram);
+	D = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_ldexd(void)		/* LD E,(IX+d) */
 {
-	E = *(IX + (char) *PC++	+ ram);
+	E = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_ldhxd(void)		/* LD H,(IX+d) */
 {
-	H = *(IX + (char) *PC++	+ ram);
+	H = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_ldlxd(void)		/* LD L,(IX+d) */
 {
-	L = *(IX + (char) *PC++	+ ram);
+	L = *(IX + (signed char) *PC++	+ ram);
 	return(19);
 }
 
 static int op_ldxda(void)		/* LD (IX+d),A */
 {
-	*(IX + (char) *PC++ + ram) = A;
+	*(IX + (signed char) *PC++ + ram) = A;
 	return(19);
 }
 
 static int op_ldxdb(void)		/* LD (IX+d),B */
 {
-	*(IX + (char) *PC++ + ram) = B;
+	*(IX + (signed char) *PC++ + ram) = B;
 	return(19);
 }
 
 static int op_ldxdc(void)		/* LD (IX+d),C */
 {
-	*(IX + (char) *PC++ + ram) = C;
+	*(IX + (signed char) *PC++ + ram) = C;
 	return(19);
 }
 
 static int op_ldxdd(void)		/* LD (IX+d),D */
 {
-	*(IX + (char) *PC++ + ram) = D;
+	*(IX + (signed char) *PC++ + ram) = D;
 	return(19);
 }
 
 static int op_ldxde(void)		/* LD (IX+d),E */
 {
-	*(IX + (char) *PC++ + ram) = E;
+	*(IX + (signed char) *PC++ + ram) = E;
 	return(19);
 }
 
 static int op_ldxdh(void)		/* LD (IX+d),H */
 {
-	*(IX + (char) *PC++ + ram) = H;
+	*(IX + (signed char) *PC++ + ram) = H;
 	return(19);
 }
 
 static int op_ldxdl(void)		/* LD (IX+d),L */
 {
-	*(IX + (char) *PC++ + ram) = L;
+	*(IX + (signed char) *PC++ + ram) = L;
 	return(19);
 }
 
@@ -727,7 +741,45 @@ static int op_ldxdn(void)		/* LD (IX+d),n */
 {
 	register int d;
 
-	d = (char) *PC++;
+	d = (signed char) *PC++;
 	*(IX + d + ram)	= *PC++;
 	return(19);
 }
+
+/**********************************************************************/
+/**********************************************************************/
+/*********       UNDOCUMENTED Z80 INSTRUCTIONS, BEWARE!      **********/
+/**********************************************************************/
+/**********************************************************************/
+
+#ifdef Z80_UNDOC
+
+static int op_undoc_ldixl(void)		/* LD IXL,A */
+{
+	if (z_flag)
+		trap_dd();
+
+	IX = (IX & 0xff00) | A;
+	return(9);
+}
+
+static int op_undoc_cpixl(void)		/* CP IXL */
+{
+	register int i;
+	register BYTE P;
+
+	if (z_flag)
+		trap_dd();
+
+	P = IX & 0xff;
+	((P & 0xf) > (A	& 0xf))	? (F |=	H_FLAG)	: (F &=	~H_FLAG);
+	(P > A)	? (F |=	C_FLAG)	: (F &=	~C_FLAG);
+	i = (signed char) A - (signed char) P;
+	(i < -128 || i > 127) ?	(F |= P_FLAG) :	(F &= ~P_FLAG);
+	(i & 128) ? (F |= S_FLAG) : (F &= ~S_FLAG);
+	(i) ? (F &= ~Z_FLAG) : (F |= Z_FLAG);
+	F |= N_FLAG;
+	return(9);
+}
+
+#endif
