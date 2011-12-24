@@ -80,13 +80,13 @@ int main(int argc, char *argv[])
 				goto usage;
 			default:
 				printf("illegal option %c\n", *s);
-usage:				printf("usage:\t%s -s -l -i -h -mn -xfilename\n", pn);
+usage:				printf("usage:\t%s -s -l -i -h -mn -fn -xfilename\n", pn);
 				puts("\ts = save core and cpu");
 				puts("\tl = load core and cpu");
 				puts("\ti = trap on I/O to unused ports");
 				puts("\th = execute HALT op-code");
 				puts("\tm = init memory with n");
-				puts("\nf = CPU frequenzy in MHz");
+				puts("\tf = CPU frequenzy n in MHz (not implemented yet)");
 				puts("\tx = load and execute filename");
 				exit(1);
 			}

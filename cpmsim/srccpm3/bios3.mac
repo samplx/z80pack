@@ -104,7 +104,7 @@ DRIVES:	DW	DPH0
 	DW	0
 	DW	0
 	DW	DPH8
-	DW	0
+	DW	DPH9
 	DW	0
 	DW	0
 	DW	0
@@ -181,11 +181,21 @@ DPB0:	DEFW	26		;sectors per track
 	DEFW	2		;track offset
 	DEFB	0,0		;physical sector size and shift
 ;
-;	fixed data tables for 4mb harddisk
+;	fixed data tables for 4mb harddisks
 ;
 ;	disk parameter header
 ;
 DPH8:	DEFW	HDTRA			;sector translation table
+	DB	0,0,0,0,0,0,0,0,0	;bdos scratch area
+	DB	0			;media flag
+	DEFW	DPB1			;disk parameter block
+	DEFW	0FFFEH			;checksum vector
+	DEFW	0FFFEH			;allocation vector
+	DEFW	0FFFEH			;directory buffer control block
+	DEFW	0FFFFH			;dtabcb not used
+	DEFW	0FFFEH			;hashing
+	DEFB	0			;hash bank
+DPH9:	DEFW	HDTRA			;sector translation table
 	DB	0,0,0,0,0,0,0,0,0	;bdos scratch area
 	DB	0			;media flag
 	DEFW	DPB1			;disk parameter block
@@ -245,7 +255,7 @@ CHRTBL:	DEFB	'CRT   '
 ;	signon message
 ;
 SIGNON:	DEFB	13,10
-	DEFM	'BANKED BIOS3 V1.3 for Z80SIM, '
+	DEFM	'BANKED BIOS3 V1.4 for Z80SIM, '
 	DEFM	'Copyright 1989-2006 by Udo Munk'
 	DEFB	13,10
 	DEFB	0
@@ -437,7 +447,9 @@ SELDSK: LD	HL,0000H	;error return code
 	LD	(DRIVE),A
 	CP	4		;disk drive 1-4?
 	JP	C,SEL1		;go
-	CP	8		;harddisk?
+	CP	8		;harddisk 1?
+	JP	Z,SEL1		;go
+	CP	9		;harddisk 2?
 	RET	NZ		;no, error
 ;	disk number is in the proper range
 ;	return proper disk parameter header address

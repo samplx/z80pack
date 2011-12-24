@@ -16,6 +16,7 @@
  * 25-JUN-92 Flush output of stdout only at every OUT to port 0
  * 25-JUN-92 Comments in english and ported to COHERENT 4.0
  * 05-OCT-06 modified to compile on modern POSIX OS's
+ * 18-NOV-06 added a second harddisk
  */
 
 /*
@@ -117,7 +118,7 @@ static struct dskdef disks[16] = {
 	{ "disks/driveg.cpm", &driveg, -1, -1 },
 	{ "disks/driveh.cpm", &driveh, -1, -1 },
 	{ "disks/drivei.cpm", &drivei, 255, 128 },
-	{ "disks/drivej.cpm", &drivej, -1, -1 },
+	{ "disks/drivej.cpm", &drivej, 255, 128 },
 	{ "disks/drivek.cpm", &drivek, -1, -1 },
 	{ "disks/drivel.cpm", &drivel, -1, -1 },
 	{ "disks/drivem.cpm", &drivem, -1, -1 },

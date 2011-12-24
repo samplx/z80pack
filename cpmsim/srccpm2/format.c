@@ -7,6 +7,7 @@
  * 29-APR-88 Development on TARGON/35 with AT&T Unix System V.3
  * 11-MAR-93 comments in english
  * 01-OCT-06 modified to compile on modern POSIX OS's
+ * 18-NOV-06 added a second harddisk
  */
 
 #include <unistd.h>
@@ -28,6 +29,7 @@
  *		drive C:	8" IBM SS,SD
  *		drive D:	8" IBM SS,SD
  *		drive I:	4MB harddisk
+ *		drive J:	4MB harddisk
  */
 int main(int argc, char *argv[])
 {
@@ -36,7 +38,7 @@ int main(int argc, char *argv[])
 	char drive;
 	static unsigned char sector[128];
 	static char fn[] = "disks/drive?.cpm";
-	static char usage[] = "usage: format a | b | c | d | i";
+	static char usage[] = "usage: format a | b | c | d | i | j";
 
 	if (argc != 2) {
 		puts(usage);
@@ -44,7 +46,8 @@ int main(int argc, char *argv[])
 	}
 	i = *argv[1];
 	if (argc != 2 ||
-	    (i != 'a' && i != 'b' && i != 'c' && i != 'd' && i!= 'i')) {
+	    (i != 'a' && i != 'b' && i != 'c' && i != 'd' && i != 'i'
+	     && i != 'j')) {
 		puts(usage);
 		exit(1);
 	}
@@ -54,7 +57,7 @@ int main(int argc, char *argv[])
 		perror("disk file");
 		exit(1);
 	}
-	if (drive != 'i') {
+	if (drive != 'i' && drive != 'j') {
 		for (i = 0; i < TRACK * SECTOR; i++)
 			write(fd, (char *) sector, 128);
 	} else {

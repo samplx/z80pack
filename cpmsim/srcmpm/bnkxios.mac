@@ -190,9 +190,11 @@ MAXCONSOLE:
 SYSTEMINIT:
 ;
 				;doesn't work
-;	LD	C,SYSDATA	;get system data page address
-;	CALL	XDOS
-;	CALL	SETTOD		;set tod from hardware clock
+	PUSH	HL
+	LD	C,SYSDATA	;get system data page address
+	CALL	XDOS
+	CALL	SETTOD		;set tod from hardware clock
+	POP	HL
 ;
 	LD	A,8		;initialize banked memory
 	OUT	(MMUINI),A
@@ -225,12 +227,6 @@ SYS3:	IM	1
 	EI
 	RET
 ;
-;	idle
-;
-IDLE:	EI
-	HALT
-	RET
-;
 ;	set mp/m tod from hardware clock
 ;	hl = tod address
 ;
@@ -253,6 +249,12 @@ SETTOD:	LD	A,GETDAL
 	OUT	(CLKCMD),A
 	IN	A,(CLKDAT)
 	LD	(HL),A
+	RET
+;
+;	idle
+;
+IDLE:	EI
+	HALT
 	RET
 ;
 ;	interrupt handler
@@ -391,11 +393,11 @@ SIGNON:	DEFB	13,10
 TICKN:	DEFB	0		;flag for tick
 PREEMP:	DEFB	0		;preempted flag
 TOD:	DEFS	4		;time of day
-SVDHL:	DEFS	2		;save hl during intterupt
+SVDHL:	DEFS	2		;save hl during interrupt
 SVDRET:	DEFS	2		;save return address during interrupt
 SVDSP:	DEFS	2		;save sp during interrupt
 CNT50:	DEFB	50		;50 ticks a 20ms = 1 second
-				;interruot stack
+				;interrupt stack
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H
 	DEFW	0C7C7H,0C7C7H,0C7C7H,0C7C7H
