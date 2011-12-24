@@ -19,6 +19,7 @@
  * 18-NOV-06 added a second harddisk
  * 08-DEC-06 modified MMU so that segment size can be configured
  * 10-DEC-06 started adding serial port for a passive TCP/IP socket
+ * 14-DEC-06 started adding serial port for a client TCP/IP socket
  */
 
 /*
@@ -51,20 +52,25 @@
  *
  *	25 - clock command
  *	26 - clock data
- *	27 - 20ms timer causing INT, only usable in IM 1
+ *	27 - 20ms timer causing IM 1 INT
+ *	28 - 10ms delay circuit
  *
- *	40 - passive socket status
- *	41 - passive socket data
+ *	40 - passive socket #1 status
+ *	41 - passive socket #1 data
  *
+ *	50 - client socket #1 status
+ *	51 - client socket #1 data
  */
 
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <time.h>
+#include <netdb.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -117,8 +123,20 @@ static int auxout;	/* fd for pipe "auxout" */
 static int aux_in_eof;	/* status of pipe "auxin" (<>0 means EOF) */
 static int pid_rec;	/* PID of the receiving process for auxiliary */
 static char last_char;	/* buffer for 1 character (console status) */
-static int s1;		/* server socket descriptor */
-static int s1a;		/* connected server socket descriptor */
+static int s1;		/* server socket #1 descriptor */
+static int s1_port;	/* TCP/IP port for s1 */
+static int s1a;		/* connected server socket #1 descriptor */
+static int c1;		/* client socket #1 descriptor */
+static int c1_port;	/* TCP/IP port for c1 */
+static char c1_host[256]; /* hostname for c1 */
+
+#ifdef CNETDEBUG
+static int cdirection = -1; /* protocol direction, 0 = send, 1 = receive */
+#endif
+
+#ifdef SNETDEBUG
+static int sdirection = -1; /* protocol direction, 0 = send 1 = receive */
+#endif
 
 static struct dskdef disks[16] = {
 	{ "disks/drivea.cpm", &drivea, 77, 26 },
@@ -182,10 +200,13 @@ static BYTE mmui_in(void), mmui_out(BYTE), mmus_in(void), mmus_out(BYTE);
 static BYTE mmuc_in(void), mmuc_out(BYTE);
 static BYTE clkc_in(void), clkc_out(BYTE), clkd_in(void), clkd_out(BYTE);
 static BYTE time_in(void), time_out(BYTE);
+static BYTE delay_in(void), delay_out(BYTE);
 static BYTE cond1_in(void), cond1_out(BYTE), cons1_in(void), cons1_out(BYTE);
+static BYTE netd1_in(void), netd1_out(BYTE), nets1_in(void), nets1_out(BYTE);
 static void int_timer(int), int_io(int);
 
 static int to_bcd(int), get_date(struct tm *);
+static void net_server_config(void), net_client_config(void);
 
 /*
  *	This array contains two function pointers for every
@@ -220,7 +241,7 @@ static BYTE (*port[256][2]) () = {
 	{ clkc_in, clkc_out },		/* port 25 */
 	{ clkd_in, clkd_out },		/* port 26 */
 	{ time_in, time_out },		/* port 27 */
-	{ io_trap, io_trap  },		/* port 28 */
+	{ delay_in, delay_out  },	/* port 28 */
 	{ io_trap, io_trap  },		/* port 29 */
 	{ io_trap, io_trap  },		/* port 30 */
 	{ io_trap, io_trap  },		/* port 31 */
@@ -237,6 +258,16 @@ static BYTE (*port[256][2]) () = {
 	{ io_trap, io_trap  },		/* port 42 */
 	{ io_trap, io_trap  },		/* port 43 */
 	{ io_trap, io_trap  },		/* port 44 */
+	{ io_trap, io_trap  },		/* port 45 */
+	{ io_trap, io_trap  },		/* port 46 */
+	{ io_trap, io_trap  },		/* port 47 */
+	{ io_trap, io_trap  },		/* port 48 */
+	{ io_trap, io_trap  },		/* port 49 */
+	{ nets1_in, nets1_out  },	/* port 50 */
+	{ netd1_in, netd1_out  },	/* port 51 */
+	{ io_trap, io_trap  },		/* port 52 */
+	{ io_trap, io_trap  },		/* port 53 */
+	{ io_trap, io_trap  }		/* port 54 */
 };
 
 /*
@@ -262,7 +293,7 @@ void init_io(void)
 	static struct sigaction newact;
 	char *opt = "12345";
 
-	for (i = 45; i <= 255; i++) {
+	for (i = 55; i <= 255; i++) {
 		port[i][0] = io_trap;
 		port[i][1] = io_trap;
 	}
@@ -304,33 +335,98 @@ void init_io(void)
 		exit(1);
 	}
 
+	net_server_config();
+	net_client_config();
+
 	newact.sa_handler = int_io;
 	sigaction(SIGIO, &newact, NULL);
-	if ((s1 = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-		perror("create socket s1");
-		exit(1);
+
+	if (s1_port) {
+		if ((s1 = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+			perror("create socket s1");
+			exit(1);
+		}
+		if (setsockopt(s1, SOL_SOCKET, SO_REUSEADDR, opt,
+		    strlen(opt)) == -1) {
+			perror("socket options s1");
+			exit(1);
+		}
+		fcntl(s1, F_SETOWN, getpid());
+		i = fcntl(s1, F_GETFL, 0);
+		if (fcntl(s1, F_SETFL, i | FASYNC) == -1) {
+			perror("fcntl FASYNC s1");
+			exit(1);
+		}
+		bzero((char *)&sin, sizeof(sin));
+		sin.sin_family = AF_INET;
+		sin.sin_addr.s_addr = INADDR_ANY;
+		sin.sin_port = htons(s1_port);
+		if (bind(s1, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+			perror("bind socket s1");
+			exit(1);
+		}
+		if (listen(s1, 0) == -1) {
+			perror("listen on socket s1");
+			exit(1);
+		}
 	}
-	if (setsockopt(s1, SOL_SOCKET, SO_REUSEADDR, opt, strlen(opt)) == -1) {
-		perror("socket options s1");
-		exit(1);
+}
+
+/*
+ * Read and process network server configuration file
+ */
+void net_server_config(void)
+{
+	FILE *fp;
+	char buf[256];
+	char *s;
+
+	if ((fp = fopen("net_server.conf", "r")) == NULL) {
+		s1_port = 0;
+	} else {
+		s = &buf[0];
+		while (fgets(s, 256, fp) != NULL) {
+			if (*s == '#')
+				continue;
+			while((*s != ' ') && (*s != '\t'))
+				s++;
+			while((*s == ' ') || (*s == '\t'))
+				s++;
+			s1_port = atoi(s);
+		}
+		fclose(fp);
 	}
-	fcntl(s1, F_SETOWN, getpid());
-	i = fcntl(s1, F_GETFL, 0);
-	if (fcntl(s1, F_SETFL, i | FASYNC) == -1) {
-		perror("fcntl FASYNC s1");
-		exit(1);
-	}
-	bzero((char *)&sin, sizeof(sin));
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = INADDR_ANY;
-	sin.sin_port = htons(4000);
-	if (bind(s1, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
-		perror("bind socket s1");
-		exit(1);
-	}
-	if (listen(s1, 0) == -1) {
-		perror("listen on socket s1");
-		exit(1);
+}
+
+/*
+ * Read and process network client configuration file
+ */
+void net_client_config(void)
+{
+	FILE *fp;
+	char buf[256];
+	char *s, *d;
+
+	if ((fp = fopen("net_client.conf", "r")) == NULL) {
+		c1_port = 0;
+	} else {
+		s = &buf[0];
+		while (fgets(s, 256, fp) != NULL) {
+			if (*s == '#')
+				continue;
+			while((*s != ' ') && (*s != '\t'))
+				s++;
+			while((*s == ' ') || (*s == '\t'))
+				s++;
+			d = &c1_host[0];
+			while ((*s != ' ') && (*s != '\t'))
+				*d++ = *s++;
+			*d = '\0';
+			while((*s == ' ') || (*s == '\t'))
+				s++;
+			c1_port = atoi(s);
+		}
+		fclose(fp);
 	}
 }
 
@@ -356,6 +452,8 @@ void exit_io(void)
 	close(s1);
 	if (s1a)
 		close(s1a);
+	if (c1)
+		close(c1);
 	kill(pid_rec, SIGHUP);
 }
 
@@ -447,6 +545,52 @@ static BYTE cons1_in(void)
 }
 
 /*
+ *	I/O handler for read client socket 1 status:
+ *	bit 0 = 1: input available
+ *	bit 1 = 1: output writable
+ */
+static BYTE nets1_in(void)
+{
+	register BYTE status = 0;
+	struct sockaddr_in sin;
+	struct hostent *host;
+	struct pollfd p[1];
+
+	if ((c1 == 0) && (c1_port != 0)) {
+		host = gethostbyname(&c1_host[0]);
+		if ((c1 = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+			perror("create socket c1");
+			exit(1);
+		}
+		bzero((char *)&sin, sizeof(sin));
+		bcopy(host->h_addr, (char *)&sin.sin_addr, host->h_length);
+		sin.sin_family = AF_INET;
+		sin.sin_port = htons(c1_port);
+		if (connect(c1, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+			perror("connect socket c1");
+			exit(1);
+		}
+	}
+
+	if (c1 != 0) {
+		p[0].fd = c1;
+		p[0].events = POLLIN | POLLOUT;
+		p[0].revents = 0;
+		poll(p, 1, 0);
+		if (p[0].revents & POLLHUP) {
+			close(c1);
+			c1 = 0;
+			return(0);
+		}
+		if (p[0].revents & POLLIN)
+			status |= 1;
+		if (p[0].revents & POLLOUT)
+			status |= 2;
+	}
+	return(status);
+}
+
+/*
  *	I/O handler for write console 0 status:
  *	no reaction
  */
@@ -461,6 +605,16 @@ static BYTE cons_out(BYTE data)
  *	no reaction
  */
 static BYTE cons1_out(BYTE data)
+{
+	data = data;
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write client socket 1 status:
+ *	no reaction
+ */
+static BYTE nets1_out(BYTE data)
 {
 	data = data;
 	return((BYTE) 0);
@@ -498,7 +652,43 @@ static BYTE cond1_in(void)
 {
 	char c;
 
-	read(s1a, &c, 1);
+	if (read(s1a, &c, 1) != 1) {
+		if (errno == EAGAIN) {
+			close(s1a);
+			s1a = 0;
+		} else {
+			perror("read s1a");
+			exit(1);
+		}
+	}
+#ifdef SNETDEBUG
+	if (sdirection != 1) {
+		printf("\n<- ");
+		sdirection = 1;
+	}
+	printf("%02x ", c);
+#endif
+	return((BYTE) c);
+}
+
+/*
+ *	I/O handler for read client socket 1 data:
+ */
+static BYTE netd1_in(void)
+{
+	char c;
+
+	if (read(c1, &c, 1) != 1) {
+		perror("read c1");
+		exit(1);
+	}
+#ifdef CNETDEBUG
+	if (cdirection != 1) {
+		printf("\n<- ");
+		cdirection = 1;
+	}
+	printf("%02x ", c);
+#endif
 	return((BYTE) c);
 }
 
@@ -508,8 +698,15 @@ static BYTE cond1_in(void)
  */
 static BYTE cond_out(BYTE data)
 {
-	while (write(fileno(stdout), (char *) &data, 1) != 1)
-		;
+again:
+	if (write(fileno(stdout), (char *) &data, 1) != 1) {
+		if (errno == EINTR) {
+			goto again;
+		} else {
+			perror("write console");
+			exit(1);
+		}
+	}
 	fflush(stdout);
 	return((BYTE) 0);
 }
@@ -520,8 +717,47 @@ static BYTE cond_out(BYTE data)
  */
 static BYTE cond1_out(BYTE data)
 {
-	while (write(s1a, (char *) &data, 1) != 1)
-		;
+#ifdef SNETDEBUG
+	if (sdirection != 0) {
+		printf("\n-> ");
+		sdirection = 0;
+	}
+	printf("%02x ", data);
+#endif
+again:
+	if (write(s1a, (char *) &data, 1) != 1) {
+		if (errno == EINTR) {
+			goto again;
+		} else {
+			perror("write s1a");
+			exit(1);
+		}
+	}
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for write client socket 1 data:
+ *	the output is written to the socket
+ */
+static BYTE netd1_out(BYTE data)
+{
+#ifdef CNETDEBUG
+	if (cdirection != 0) {
+		printf("\n-> ");
+		cdirection = 0;
+	}
+	printf("%02x ", data);
+#endif
+again:
+	if (write(c1, (char *) &data, 1) != 1) {
+		if (errno == EINTR) {
+			goto again;
+		} else {
+			perror("write c1");
+			exit(1);
+		}
+	}
 	return((BYTE) 0);
 }
 
@@ -559,9 +795,17 @@ static BYTE prtd_in(void)
  */
 static BYTE prtd_out(BYTE data)
 {
-	if (data != '\r')
-		while (write(printer, (char *) &data, 1) != 1)
-			;
+	if (data != '\r') {
+again:
+		if (write(printer, (char *) &data, 1) != 1) {
+			if (errno == EINTR) {
+				goto again;
+			} else {
+				perror("write printer");
+				exit(1);
+			}
+		}
+	}
 	return((BYTE) 0);
 }
 
@@ -1028,6 +1272,34 @@ static BYTE time_in(void)
 }
 
 /*
+ *	I/O handler for write delay
+ *	delay CPU for 10ms
+ */
+static BYTE delay_out(BYTE data)
+{
+	struct timespec timer;
+
+	timer.tv_sec = 0;
+	timer.tv_nsec = 10000000;
+	nanosleep(&timer, NULL);
+
+#ifdef CNETDEBUG
+	printf(". ");
+#endif
+
+	return((BYTE) 0);
+}
+
+/*
+ *	I/O handler for read delay
+ *	returns 0
+ */
+static BYTE delay_in(void)
+{
+	return((BYTE) 0);
+}
+
+/*
  *	timer interrupt causes maskerable CPU interrupt
  */
 static void int_timer(int sig)
@@ -1042,14 +1314,17 @@ static void int_io(int sig)
 {
 	struct sockaddr_in fsin;
 	int alen;
+	int go_away;
 
-	if (s1a == 0) {
-		alen = sizeof(fsin);
-		if ((s1a = accept(s1, (struct sockaddr *)&fsin, &alen)) == -1) {
-			perror("accept s1");
-			s1a = 0;
-		}
-	} else {
-		printf("\nUNHANDLED SIGIO!\n");
+	if (s1a != 0) {
+		go_away = accept(s1, (struct sockaddr *)&fsin, &alen);
+		close(go_away);
+		return;
+	}
+
+	alen = sizeof(fsin);
+	if ((s1a = accept(s1, (struct sockaddr *)&fsin, &alen)) == -1) {
+		perror("accept s1");
+		s1a = 0;
 	}
 }

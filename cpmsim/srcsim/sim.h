@@ -15,7 +15,8 @@
  * 25-JUN-92 Release 1.7  comments in english
  * 02-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
  * 18-NOV-06 Release 1.9  modified to work with CP/M sources
- * 08-DEC-06 Release 1.10 modified MMU for working with CP-NET
+ * 08-DEC-06 Release 1.10 modified MMU for working with CP/NET
+ * 17-DEC-06 Release 1.11 TCP/IP sockets for CP/NET
  */
 
 /*
@@ -31,12 +32,14 @@
 #define WANT_TIM	/* run length measurement needed to adjust CPU speed */
 /*#define HISIZE  1000*//* no history */
 /*#define SBSIZE  10*/	/* no breakpoints */
+/*#define CNETDEBUG*/	/* client network protocol debugger */
+/*#define SNETDEBUG*/	/* server network protocol debugger */
 
 /*
  *	The following lines of this file should not be modified by user
  */
 #define COPYR	"Copyright (C) 1987-2006 by Udo Munk"
-#define RELEASE	"1.10"
+#define RELEASE	"1.11"
 
 #define LENCMD		80		/* length of command buffers etc */
 

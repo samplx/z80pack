@@ -18,6 +18,7 @@
  * 03-OCT-06 Release 1.8  modified to compile on modern POSIX OS's
  * 18-NOV-06 Release 1.9  work on CP/M emulation
  * 08-DEC-06 Release 1.10 work on CP/M emulation
+ * 17-DEC-06 Release 1.11 CP/NET 1.1 working
  */
 
 /*
@@ -49,7 +50,7 @@
  *	The following lines of this file should not be modified by user
  */
 #define	COPYR	"Copyright (C) 1987-2006 by Udo Munk"
-#define	RELEASE	"1.10"
+#define	RELEASE	"1.11"
 
 #define	LENCMD		80		/* length of command buffers etc */
 
