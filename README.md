@@ -1,9 +1,12 @@
+# z80pack
 
-z80pack is a Z80 cross development package for UNIX systems.
-It was written by Udo Munk.
+I created this repo when Udo's site was off-line.
+That is no longer the case.
 
-It is distributed under a BSD style license.
-See COPYING for details.
+[unix4fun](https://www.autometer.de/unix4fun/)
 
+The updated code is also in the repo
+[GitHub](https://github.com/udo-munk/z80pack)
 
+This repo has been archived.
 
